@@ -668,28 +668,70 @@ function NutrScreen(props) {
   var fileRef = useRef(null);
   var rem = { cal: t.cal - cn.cal, pro: t.pro - cn.pro, carb: t.carb - cn.carb, fat: t.fat - cn.fat, sod: t.sod - cn.sod };
 
+  function analyzePhotoB64(b64, mediaType) {
+    var apiKey = getApiKey();
+    if (!apiKey) { setShowKey(true); setAnalyzing(false); return; }
+    setAnalyzing(true);
+    setAnalyzeErr('API 호출 중...');
+    fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-opus-4-5', max_tokens: 300, messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: b64 } },
+        { type: 'text', text: '음식 사진 영양정보를 JSON만 반환(다른 텍스트 없음):\n{"name":"한국어 음식명","cal":숫자,"pro":숫자,"carb":숫자,"fat":숫자,"sug":숫자}\n단위: cal=kcal, 나머지=g, 1인분' }
+      ]}]})
+    }).then(function(r) {
+      if (!r.ok) { return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t.slice(0,120)); }); }
+      return r.json();
+    }).then(function(d) {
+      if (d.error) { setAnalyzeErr('API 오류: ' + d.error.message); setAnalyzing(false); return; }
+      var blk = null;
+      for (var i = 0; i < (d.content || []).length; i++) { if (d.content[i].type === 'text') { blk = d.content[i]; break; } }
+      if (!blk) { setAnalyzeErr('응답 없음'); setAnalyzing(false); return; }
+      try {
+        var r2 = JSON.parse(blk.text.replace(/```json/g,'').replace(/```/g,'').trim());
+        setForm({ name: r2.name||'', cal:''+(r2.cal||''), pro:''+(r2.pro||''), carb:''+(r2.carb||''), fat:''+(r2.fat||''), sug:''+(r2.sug||''), meal: form.meal||'아침' });
+        setAnalyzeErr('');
+        setMode('manual');
+        setAnalyzing(false);
+      } catch(pe) { setAnalyzeErr('파싱 오류: ' + blk.text.slice(0,80)); setAnalyzing(false); }
+    }).catch(function(e) { setAnalyzeErr('요청 실패: ' + e.message); setAnalyzing(false); });
+  }
+
   function analyzePhoto(file) {
     var apiKey = getApiKey();
     if (!apiKey) { setShowKey(true); return; }
     setAnalyzing(true);
+    setAnalyzeErr('파일 읽는 중...');
     var reader = new FileReader();
     reader.onload = function() {
       var b64 = reader.result.split(',')[1];
+      if (!b64) { setAnalyzeErr('파일 읽기 실패 (b64 없음)'); setAnalyzing(false); return; }
+      var mediaType = file.type || 'image/jpeg';
+      setAnalyzeErr('API 호출 중... (' + mediaType + ')');
       fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 300, messages: [{ role: 'user', content: [
-          { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: b64 } },
-          { type: 'text', text: '\uC74C\uC2DD \uC0AC\uC9C4 \uC601\uC591\uC815\uBCF4\uB97C JSON\uB9CC \uBC18\uD658(\uB2E4\uB978 \uD14D\uC2A4\uD2B8 \uC5C6\uC74C):\n{"name":"\uD55C\uAD6D\uC5B4 \uC74C\uC2DD\uBA85","cal":\uC22B\uC790,"pro":\uC22B\uC790,"carb":\uC22B\uC790,"fat":\uC22B\uC790,"sug":\uC22B\uC790}\n\uB2E8\uC704: cal=kcal, \uB098\uBA38\uC9C0=g, 1\uC778\uBD84' }
+        body: JSON.stringify({ model: 'claude-opus-4-5', max_tokens: 300, messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
+          { type: 'text', text: '음식 사진 영양정보를 JSON만 반환(다른 텍스트 없음):\n{"name":"한국어 음식명","cal":숫자,"pro":숫자,"carb":숫자,"fat":숫자,"sug":숫자}\n단위: cal=kcal, 나머지=g, 1인분' }
         ]}]})
-      }).then(function(r) { return r.json(); }).then(function(d) {
+      }).then(function(r) {
+        if (!r.ok) { return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t.slice(0,100)); }); }
+        return r.json();
+      }).then(function(d) {
+        if (d.error) { setAnalyzeErr('API 오류: ' + d.error.message); setAnalyzing(false); return; }
         var blk = null;
         for (var i = 0; i < (d.content || []).length; i++) { if (d.content[i].type === 'text') { blk = d.content[i]; break; } }
-        var r2 = JSON.parse((blk ? blk.text : '{}').replace(/```json/g, '').replace(/```/g, '').trim());
-        setForm({ name: r2.name || '', cal: '' + (r2.cal || ''), pro: '' + (r2.pro || ''), carb: '' + (r2.carb || ''), fat: '' + (r2.fat || ''), sug: '' + (r2.sug || ''), meal: form.meal || '아침' });
-        setMode('manual');
-        setAnalyzing(false);
-      }).catch(function(e) { setAnalyzeErr('분석 실패: ' + e.message); setAnalyzing(false); });
+        if (!blk) { setAnalyzeErr('응답 없음: ' + JSON.stringify(d).slice(0,80)); setAnalyzing(false); return; }
+        try {
+          var r2 = JSON.parse(blk.text.replace(/```json/g,'').replace(/```/g,'').trim());
+          setForm({ name: r2.name||'', cal:''+(r2.cal||''), pro:''+(r2.pro||''), carb:''+(r2.carb||''), fat:''+(r2.fat||''), sug:''+(r2.sug||''), meal: form.meal||'아침' });
+          setAnalyzeErr('');
+          setMode('manual');
+          setAnalyzing(false);
+        } catch(pe) { setAnalyzeErr('파싱 오류: ' + blk.text.slice(0,80)); setAnalyzing(false); }
+      }).catch(function(e) { setAnalyzeErr('요청 실패: ' + e.message); setAnalyzing(false); });
     };
     reader.onerror = function() { setAnalyzeErr('파일 읽기 오류'); setAnalyzing(false); };
     reader.readAsDataURL(file);
@@ -855,7 +897,7 @@ function NutrScreen(props) {
               h('div', { style: { fontSize: '36px', marginBottom: '8px' } }, '📸'),
               h('p', { style: { margin: '0 0 12px', fontSize: '12px', color: C.sub } }, '추기사진하면 Claude AI가 영양정보를 분석해요'),
               h('input', { ref: fileRef, type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: function(e) { if (e.target.files && e.target.files[0]) analyzePhoto(e.target.files[0]); } }),
-              h('button', { onClick: function() { setAnalyzeErr(''); if (fileRef.current) fileRef.current.click(); }, disabled: analyzing, style: mx(BTP, { opacity: analyzing ? '0.5' : '1' }) }, analyzing ? '분석 중...' : '사진 선택 / 촬영'),
+              h('button', { onClick: function() { setAnalyzeErr(''); if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openPhotoPicker) { window.webkit.messageHandlers.openPhotoPicker.postMessage({}); } else if (fileRef.current) { fileRef.current.click(); } }, disabled: analyzing, style: mx(BTP, { opacity: analyzing ? '0.5' : '1' }) }, analyzing ? '분석 중...' : '사진 선택 / 촬영'),
               analyzeErr ? h('p', { style: { margin: '8px 0 0', fontSize: '12px', color: C.ce, textAlign: 'center' } }, analyzeErr) : null,
               h('button', { onClick: function() { setShowKey(true); }, style: { background: 'none', border: 'none', color: C.aL, fontSize: '11px', cursor: 'pointer', marginTop: '8px', textDecoration: 'underline' } }, 'API 키 설정')
             ) : h('div', null,
