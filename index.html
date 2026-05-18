@@ -1380,7 +1380,7 @@ function SettingsScreen(props) {
 }
 
 function ChatScreen(props) {
-  var data = props.data, consumed = props.consumed, tgt = props.tgt, goal = props.goal;
+  var data = props.data, consumed = props.consumed, tgt = props.tgt, goal = props.goal, td = props.td;
   var msgs = props.chatMsgs, setMsgs = props.setChatMsgs;
   var is = useState(''); var input = is[0], setInput = is[1];
   var ls = useState(false); var loading = ls[0], setLoading = ls[1];
@@ -1406,27 +1406,32 @@ function ChatScreen(props) {
     var tgtPro  = tgt ? Math.round(tgt.pro)  : 0;
     var tgtCarb = tgt ? Math.round(tgt.carb) : 0;
     var tgtFat  = tgt ? Math.round(tgt.fat)  : 0;
+    var foods = (td && td.foods) || [];
+    var foodLines = foods.length > 0
+      ? foods.map(function(f) { return '  - ' + f.name + ' (' + f.meal + '): ' + Math.round(f.calories) + 'kcal, 단백질 ' + (f.protein||0) + 'g, 탄수 ' + (f.carbs||0) + 'g, 지방 ' + (f.fat||0) + 'g'; }).join('\n')
+      : '  (아직 없음)';
     var sysPrompt = [
-      '당신은 한국어 식단 관리 어시스턴트입니다. 반드시 한국어로만 답변하세요. 다른 언어(영어, 러시아어 등)를 절대 섞지 마세요.',
+      '당신은 한국어 식단 관리 어시스턴트입니다. 반드시 한국어로만 답변하세요. 다른 언어를 절대 섞지 마세요.',
       '',
-      '음식 영양정보를 답할 때는 반드시 다음 순서를 따르세요:',
-      '1. 해당 음식의 실제 칼로리/영양 수치를 농촌진흥청 식품성분표 또는 제조사 공식 수치 기준으로 정확히 산출하세요.',
-      '2. 확실하지 않은 수치는 추정 범위로 표시하세요. 예: "약 520~560kcal"',
-      '3. 수치를 구한 후, 아래 형식으로 사용자 현황과 비교해 답하세요.',
+      '⚠️ 중요: 아래 【오늘 실제 식단】과 【오늘 현황】은 사용자가 앱에 직접 입력한 실제 데이터입니다.',
+      '절대 이 수치를 무시하거나 임의로 추정하지 마세요. 남은 칼로리/영양소 계산 시 반드시 아래 수치를 기준으로 하세요.',
       '',
-      '【오늘 현황】',
-      '목표: 칼로리 ' + tgtCal + 'kcal / 단백질 ' + tgtPro + 'g / 탄수화물 ' + tgtCarb + 'g / 지방 ' + tgtFat + 'g',
-      '섭취: 칼로리 ' + Math.round(consumed.cal) + 'kcal / 단백질 ' + Math.round(consumed.pro) + 'g / 탄수화물 ' + Math.round(consumed.carb) + 'g / 지방 ' + Math.round(consumed.fat) + 'g',
-      '남은: 칼로리 ' + rem + 'kcal / 단백질 ' + (tgtPro - Math.round(consumed.pro)) + 'g / 탄수화물 ' + (tgtCarb - Math.round(consumed.carb)) + 'g / 지방 ' + (tgtFat - Math.round(consumed.fat)) + 'g',
+      '【오늘 실제 식단 기록】',
+      foodLines,
       '',
-      '사용자가 특정 음식을 먹어도 되는지 물으면 아래 형식으로만 답하세요:',
+      '【오늘 현황 합계】 (위 식단의 합산 결과)',
+      '목표:  칼로리 ' + tgtCal + 'kcal / 단백질 ' + tgtPro + 'g / 탄수화물 ' + tgtCarb + 'g / 지방 ' + tgtFat + 'g',
+      '섭취:  칼로리 ' + Math.round(consumed.cal) + 'kcal / 단백질 ' + Math.round(consumed.pro) + 'g / 탄수화물 ' + Math.round(consumed.carb) + 'g / 지방 ' + Math.round(consumed.fat) + 'g',
+      '남은:  칼로리 ' + rem + 'kcal / 단백질 ' + (tgtPro - Math.round(consumed.pro)) + 'g / 탄수화물 ' + (tgtCarb - Math.round(consumed.carb)) + 'g / 지방 ' + (tgtFat - Math.round(consumed.fat)) + 'g',
+      '',
+      '음식 영양정보 질문 시 아래 형식으로 답하세요:',
       '',
       '[음식명] 예상 영양정보',
       '• 칼로리: XXXkcal',
       '• 단백질: XXg / 탄수화물: XXg / 지방: XXg',
       '',
-      '먹은 후 남는 양',
-      '• 칼로리: XXXkcal (목표 대비 초과/여유)',
+      '먹은 후 남는 양 (위 【남은】 수치에서 차감)',
+      '• 칼로리: XXXkcal (초과/여유)',
       '• 단백질: XXg / 탄수화물: XXg / 지방: XXg',
       '',
       '✅ 먹어도 됩니다 또는 ⚠️ 주의 필요 또는 ❌ 초과됩니다',
