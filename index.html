@@ -1666,7 +1666,7 @@ function App() {
       tab === 'chat'      ? h(ChatScreen, ctx) : null,
       tab === 'settings'  ? h(SettingsScreen, ctx) : null
     ),
-    !isWide ? h('nav', { className: 'nav' },
+    !isWide ? h('nav', { className: 'nav', style: { background: C.card, borderTop: '1px solid ' + C.bd } },
       h('button', { className: 'nb' + (tab === 'dash'      ? ' on' : ''), onClick: function() { setTab('dash');      } }, h('span', { className: 'ni' }, '\uD83C\uDFE0'), h('span', { className: 'nl' }, '\uD648')),
       h('button', { className: 'nb' + (tab === 'body'      ? ' on' : ''), onClick: function() { setTab('body');      } }, h('span', { className: 'ni' }, '\u2696\uFE0F'), h('span', { className: 'nl' }, '\uCCB4\uC911')),
       h('button', { className: 'nb' + (tab === 'nutrition' ? ' on' : ''), onClick: function() { setTab('nutrition'); } }, h('span', { className: 'ni' }, '\uD83C\uDF71'), h('span', { className: 'nl' }, '\uC601\uC591')),
