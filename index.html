@@ -746,7 +746,16 @@ function NutrScreen(props) {
         updD(TODAY, { foods: (td.foods||[]).concat([food]) });
         setAnalyzeErr(''); setAnalyzing(false); setShowForm(false);
       } catch(pe) { setAnalyzeErr('파싱 오류: ' + text.slice(0,100)); setAnalyzing(false); }
-    }).catch(function(e) { setAnalyzeErr('요청 실패: ' + e.message); setAnalyzing(false); });
+    }).catch(function(e) {
+      var msg = e.message || '';
+      if (msg.indexOf('401') !== -1 || msg.indexOf('400') !== -1 || msg.indexOf('invalid') !== -1) {
+        setShowKey(true);
+        setAnalyzeErr('API 키가 유효하지 않습니다. 키를 다시 입력해주세요.');
+      } else {
+        setAnalyzeErr('요청 실패: ' + msg);
+      }
+      setAnalyzing(false);
+    });
   }
 
   function analyzePhoto(file) {
@@ -1449,9 +1458,9 @@ function ChatScreen(props) {
       setLoading(false);
     }).catch(function(e) {
       var msg = e.message || '';
-      if (msg.indexOf('400') !== -1 || msg.indexOf('403') !== -1 || msg.indexOf('API key') !== -1) {
+      if (msg.indexOf('400') !== -1 || msg.indexOf('401') !== -1 || msg.indexOf('403') !== -1 || msg.indexOf('API key') !== -1 || msg.indexOf('invalid') !== -1) {
         setShowKey(true);
-        setMsgs(function(prev) { return prev.concat([{ role: 'model', text: 'API 키가 유효하지 않습니다. 아래에서 키를 다시 입력해주세요. (console.groq.com에서 gsk_... 형태로 발급)' }]); });
+        setMsgs(function(prev) { return prev.concat([{ role: 'model', text: 'API 키가 유효하지 않습니다. 아래에서 Groq 키를 다시 입력해주세요. (console.groq.com → API Keys → gsk_... 형태)' }]); });
       } else {
         setMsgs(function(prev) { return prev.concat([{ role: 'model', text: '오류: ' + msg }]); });
       }
