@@ -42,7 +42,7 @@ var useRef = React.useRef;
 
 /* ─── CONSTANTS ─────────────────────────────── */
 var STORE = 'diet-v5';
-(function() { if (!localStorage.getItem('diet-ak')) localStorage.setItem('diet-ak', 'AIzaSyAf5W_aIHHP1PhILXVqgrvgIoTq6SKQoy0'); })();
+
 
 /* ─── FIREBASE SYNC ──────────────────────────── */
 var FB_CONFIG = {
@@ -926,7 +926,7 @@ function NutrScreen(props) {
       h('div', { style: { display: 'flex', gap: '6px', marginBottom: '12px' } }, modeBtn('manual', '\uC9C1\uC811 \uC785\uB825'), modeBtn('photo', '\uC0AC\uC9C4 \uBD84\uC11D (AI)')),
       mode === 'photo' ? h('div', { style: { textAlign: 'center', padding: '16px 0' } },
         h('div', { style: { fontSize: '36px', marginBottom: '8px' } }, '\uD83D\uDCF8'),
-        h('p', { style: { margin: '0 0 12px', fontSize: '12px', color: C.sub } }, '\uCD94\uAE30\uC0AC\uC9C4\uD558\uBA74 Claude AI\uAC00 \uC601\uC591\uC815\uBCF4\uB97C \uBD84\uC11D\uD574\uC694'),
+        h('p', { style: { margin: '0 0 12px', fontSize: '12px', color: C.sub } }, '사진을 추가하면 AI가 영양정보를 분석해요'),
         h('input', { ref: fileRef, type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: function(e) { if (e.target.files && e.target.files[0]) analyzePhoto(e.target.files[0]); } }),
         h('button', { onClick: function() { setAnalyzeErr(''); if (fileRef.current) { fileRef.current.click(); } }, disabled: analyzing, style: mx(BTP, { opacity: analyzing ? '0.5' : '1' }) }, analyzing ? '\uBD84\uC11D \uC911...' : '\uC0AC\uC9C4 \uC120\uD0DD / \uCD2C\uC601'),
         analyzeErr ? h('p', { style: { margin: '8px 0 0', fontSize: '12px', color: C.ce, textAlign: 'center' } }, analyzeErr) : null,
