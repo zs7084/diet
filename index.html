@@ -9,7 +9,7 @@
 <title>다이어트 트래커</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:#080812;color:#f0f0f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-tap-highlight-color:transparent;overflow:hidden}
+html,body{height:100%;background:var(--bg,#080812);color:var(--tx,#f0f0f0);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-tap-highlight-color:transparent;overflow:hidden}
 #root{height:100%}
 button{cursor:pointer;font-family:inherit}
 button:active{opacity:.75}
@@ -21,6 +21,7 @@ input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;bac
 .nav{background:#13131e;border-top:1px solid #2a2a3a;display:flex;padding-bottom:env(safe-area-inset-bottom);flex-shrink:0}
 .nb{flex:1;padding:10px 4px 8px;background:transparent;border:none;border-top:2px solid transparent;display:flex;flex-direction:column;align-items:center;gap:3px;color:#555;cursor:pointer;transition:color .2s,border-color .2s}
 .nb.on{color:#818cf8;border-top-color:#818cf8}
+@keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
 .ni{font-size:22px;line-height:1}
 .nl{font-size:10px;font-weight:600}
 </style>
@@ -102,12 +103,37 @@ var EXTYPE = [
   { l: '에어로빅',  icon: '💃', met: 5.5, d: '에어로빅 / 줌바' },
   { l: '기타',      icon: '💪', met: 4.0, d: '기타 유산소' }
 ];
-var C = {
-  bg:'#080812', card:'#13131e', c2:'#1a1a2e', bd:'#2a2a3a',
-  tx:'#f0f0f0', sub:'#888', acc:'#6366f1', aL:'#818cf8',
-  cw:'#60a5fa', cm:'#34d399', cf:'#fb923c', cc:'#a78bfa',
-  cx:'#22d3ee', ce:'#f87171', csod:'#38bdf8', csug:'#f59e0b'
-};
+var THEMES = [
+  { id:'default',  name:'기본',     dark:true,  bg:'#080812', card:'#13131e', c2:'#1a1a2e', bd:'#2a2a3a', acc:'#6366f1', aL:'#818cf8', tx:'#f0f0f0', sub:'#888' },
+  { id:'navy',     name:'네이비',    dark:true,  bg:'#050b18', card:'#0d1628', c2:'#121f38', bd:'#1e3050', acc:'#3b82f6', aL:'#60a5fa', tx:'#f0f0f0', sub:'#778' },
+  { id:'forest',   name:'포레스트',  dark:true,  bg:'#050f0a', card:'#0d1f14', c2:'#122b1e', bd:'#1a3a28', acc:'#10b981', aL:'#34d399', tx:'#f0f0f0', sub:'#7a8' },
+  { id:'charcoal', name:'차콜',      dark:true,  bg:'#0d0d0d', card:'#1a1a1a', c2:'#222222', bd:'#333333', acc:'#e879f9', aL:'#f0abfc', tx:'#f0f0f0', sub:'#888' },
+  { id:'crimson',  name:'크림슨',    dark:true,  bg:'#0f0508', card:'#1e0d12', c2:'#2a101a', bd:'#3a1520', acc:'#f43f5e', aL:'#fb7185', tx:'#f0f0f0', sub:'#a87' },
+  { id:'amber',    name:'앰버',      dark:true,  bg:'#0d0900', card:'#1c1500', c2:'#2a2000', bd:'#3a2e00', acc:'#f59e0b', aL:'#fbbf24', tx:'#f0f0f0', sub:'#a98' },
+  { id:'light',     name:'라이트',    dark:false, bg:'#f5f5fa', card:'#ffffff', c2:'#eeeef8', bd:'#d8d8ec', acc:'#6366f1', aL:'#4f46e5', tx:'#1a1a2e', sub:'#667' },
+  { id:'sky',       name:'스카이',    dark:false, bg:'#f0f7ff', card:'#ffffff', c2:'#e6f0fc', bd:'#c8ddf4', acc:'#3b82f6', aL:'#1d4ed8', tx:'#0f1f3d', sub:'#567' },
+  { id:'mint',      name:'민트',      dark:false, bg:'#f0faf5', card:'#ffffff', c2:'#e4f7ed', bd:'#c4e8d4', acc:'#10b981', aL:'#059669', tx:'#0a2010', sub:'#4a7a5a' },
+  { id:'lavender',  name:'라벤더',    dark:false, bg:'#faf5ff', card:'#ffffff', c2:'#f3e8ff', bd:'#e2d0f8', acc:'#a855f7', aL:'#7c3aed', tx:'#1a0830', sub:'#7a6088' },
+  { id:'rose',      name:'로즈',      dark:false, bg:'#fff5f7', card:'#ffffff', c2:'#ffeef1', bd:'#f8d0d8', acc:'#f43f5e', aL:'#e11d48', tx:'#2d0810', sub:'#886070' },
+  { id:'cream',     name:'크림',      dark:false, bg:'#faf8f3', card:'#ffffff', c2:'#f5f0e8', bd:'#e0d8c8', acc:'#d97706', aL:'#b45309', tx:'#2d2010', sub:'#88775a' }
+];
+(function() {
+  var tid = localStorage.getItem('diet-theme') || 'default';
+  var t = THEMES.filter(function(t) { return t.id === tid; })[0] || THEMES[0];
+  document.documentElement.style.setProperty('--bg',   t.bg);
+  document.documentElement.style.setProperty('--tx',   t.tx);
+  document.documentElement.style.setProperty('--card', t.card);
+})();
+
+var C = (function() {
+  var tid = localStorage.getItem('diet-theme') || 'default';
+  var t = THEMES.filter(function(x) { return x.id === tid; })[0] || THEMES[0];
+  return {
+    bg: t.bg, card: t.card, c2: t.c2, bd: t.bd, acc: t.acc, aL: t.aL, tx: t.tx, sub: t.sub,
+    cw:'#60a5fa', cm:'#34d399', cf:'#fb923c', cc:'#a78bfa',
+    cx:'#22d3ee', ce:'#f87171', csod:'#38bdf8', csug:'#f59e0b'
+  };
+})();
 
 /* ─── STORAGE ────────────────────────────────── */
 function loadData() {
@@ -138,11 +164,15 @@ function getApiKey() { return localStorage.getItem('diet-ak') || ''; }
 function setApiKey(k) { localStorage.setItem('diet-ak', k); }
 
 /* ─── MATH ───────────────────────────────────── */
-function calcBMR(w) { return Math.round(10 * w + 6.25 * HT - 5 * AGE + 5); }
-function calcTDEE(w) { return Math.round(calcBMR(w) * 1.375); }
-function calcTgt(w, exC, weeklyLoss) {
+function calcBMR(w, ht, age, isFemale) {
+  ht = ht || HT; age = age || AGE;
+  return Math.round(10 * w + 6.25 * ht - 5 * age + (isFemale ? -161 : 5));
+}
+function calcTDEE(w, ht, age, isFemale) { return Math.round(calcBMR(w, ht, age, isFemale) * 1.375); }
+function calcTgt(w, exC, weeklyLoss, ht, age, isFemale) {
   w = w || 89.73; exC = exC || 0; weeklyLoss = weeklyLoss || 0.5;
-  var b = calcBMR(w), t = calcTDEE(w);
+  ht = ht || HT; age = age || AGE;
+  var b = calcBMR(w, ht, age, isFemale), t = calcTDEE(w, ht, age, isFemale);
   var deficit = Math.round(weeklyLoss * 1100);
   var cal = Math.max(1500, Math.round(t - deficit + exC * 0.5));
   var pro = Math.round(w * 1.8);
@@ -670,34 +700,34 @@ function NutrScreen(props) {
   var rem = { cal: t.cal - cn.cal, pro: t.pro - cn.pro, carb: t.carb - cn.carb, fat: t.fat - cn.fat, sod: t.sod - cn.sod };
 
   function analyzePhotoB64(b64, mediaType) {
-    var apiKey = getApiKey();
+    var apiKey = (getApiKey() || '').replace(/[^\x21-\x7E]/g,'').trim();
     if (!apiKey) { setShowKey(true); setAnalyzing(false); return; }
     setAnalyzing(true);
     setAnalyzeErr('AI 분석 중...');
-    fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + apiKey, {
+    fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [
-        { inline_data: { mime_type: mediaType || 'image/jpeg', data: b64 } },
-        { text: '음식 사진 영양정보를 JSON만 반환(다른 텍스트 없음):\n{"name":"한국어 음식명","cal":숫자,"pro":숫자,"carb":숫자,"fat":숫자,"sug":숫자}\n단위: cal=kcal, 나머지=g, 1인분' }
-      ]}] })
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: [
+          { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64 } },
+          { type: 'text', text: '음식 사진 영양정보를 JSON만 반환(다른 텍스트 없음):\n{"name":"한국어 음식명","cal":숫자,"pro":숫자,"carb":숫자,"fat":숫자,"sug":숫자}\n단위: cal=kcal, 나머지=g, 1인분' }
+        ]}]
+      })
     }).then(function(r) {
       if (!r.ok) { return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t.slice(0,120)); }); }
       return r.json();
     }).then(function(d) {
-      if (d.error) { setAnalyzeErr('API 오류: ' + d.error.message); setAnalyzing(false); return; }
-      var text = ((d.candidates||[])[0]||{}).content;
-      text = ((text||{}).parts||[])[0];
-      text = (text||{}).text || '';
-      if (!text) { setAnalyzeErr('응답 없음: ' + JSON.stringify(d).slice(0,80)); setAnalyzing(false); return; }
+      var text = (((d.choices||[])[0]||{}).message||{}).content || '';
+      if (!text) { setAnalyzeErr('응답 없음'); setAnalyzing(false); return; }
       try {
-        var r2 = JSON.parse(text.replace(/```json/g,'').replace(/```/g,'').trim());
-        var food = { id: Date.now(), name: r2.name||'음식', meal: form.meal||'아침', grams: parseFloat(r2.g)||0, calories: parseFloat(r2.cal)||0, protein: parseFloat(r2.pro)||0, carbs: parseFloat(r2.carb)||0, fat: parseFloat(r2.fat)||0, sugar: parseFloat(r2.sug)||0, sodium: parseFloat(r2.sod)||0, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) };
+        var cleaned = text.replace(/```json/g,'').replace(/```/g,'').trim().replace(/:\s*(\d+(?:\.\d+)?)\s*[a-zA-Z]+/g,':$1');
+        var r2 = JSON.parse(cleaned);
+        var food = { id: Date.now(), name: r2.name||'음식', meal: form.meal||'아침', grams: 0, calories: parseFloat(r2.cal)||0, protein: parseFloat(r2.pro)||0, carbs: parseFloat(r2.carb)||0, fat: parseFloat(r2.fat)||0, sugar: parseFloat(r2.sug)||0, sodium: 0, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) };
         updD(TODAY, { foods: (td.foods||[]).concat([food]) });
-        setAnalyzeErr('');
-        setAnalyzing(false);
-        setShowForm(false);
-      } catch(pe) { setAnalyzeErr('파싱 오류: ' + text.slice(0,80)); setAnalyzing(false); }
+        setAnalyzeErr(''); setAnalyzing(false); setShowForm(false);
+      } catch(pe) { setAnalyzeErr('파싱 오류: ' + text.slice(0,100)); setAnalyzing(false); }
     }).catch(function(e) { setAnalyzeErr('요청 실패: ' + e.message); setAnalyzing(false); });
   }
 
@@ -835,11 +865,11 @@ function NutrScreen(props) {
         h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '× 닫기' : '+ 추가')
       ),
       showKey ? h('div', { style: CARD },
-        h('p', { style: CTITL }, 'API 키 설정 (사진 분석용)'),
-        h('p', { style: { margin: '0 0 10px', fontSize: '12px', color: C.sub } }, 'aistudio.google.com 에서 발급 가능해요.'),
-        h('div', { style: { marginBottom: '11px' } }, h('label', { style: { display: 'block', fontSize: '12px', color: C.sub, marginBottom: '3px' } }, 'Gemini API 키'), h('input', { type: 'password', placeholder: 'AIzaSy...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); }, style: INP })),
+        h('p', { style: CTITL }, 'Groq API 키 설정'),
+        h('p', { style: { margin: '0 0 10px', fontSize: '12px', color: C.sub } }, 'console.groq.com 에서 무료 발급'),
+        h('div', { style: { marginBottom: '11px' } }, h('label', { style: { display: 'block', fontSize: '12px', color: C.sub, marginBottom: '3px' } }, 'Groq API 키'), h('input', { type: 'password', placeholder: 'gsk_...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); }, style: INP })),
         h('div', { style: { display: 'flex', gap: '8px' } },
-          h('button', { onClick: function() { setApiKey(keyInput); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '저장'),
+          h('button', { onClick: function() { setApiKey(keyInput.trim()); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '저장'),
           h('button', { onClick: function() { setShowKey(false); }, style: mx(BTS, { flex: '1' }) }, '취소')
         )
       ) : null,
@@ -924,11 +954,11 @@ function NutrScreen(props) {
       h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '\u00D7 \uB2EB\uAE30' : '+ \uCD94\uAC00')
     ),
     showKey ? h('div', { style: CARD },
-      h('p', { style: CTITL }, 'API \uD0A4 \uC124\uC815 (\uC0AC\uC9C4 \uBD84\uC11D\uC6A9)'),
-      h('p', { style: { margin: '0 0 10px', fontSize: '12px', color: C.sub } }, 'console.anthropic.com \uC5D0\uC11C \uBC1C\uAE09 \uAC00\uB2A5\uD574\uC694.'),
-      h('div', { style: { marginBottom: '11px' } }, L('API \uD0A4 (sk-ant-...)'), I({ type: 'password', placeholder: 'AIzaSy...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); } })),
+      h('p', { style: CTITL }, 'Groq API \uD0A4 \uC124\uC815'),
+      h('p', { style: { margin: '0 0 10px', fontSize: '12px', color: C.sub } }, 'console.groq.com \uC5D0\uC11C \uBB34\uB8CC \uBC1C\uAE09'),
+      h('div', { style: { marginBottom: '11px' } }, L('Groq API \uD0A4'), I({ type: 'password', placeholder: 'gsk_...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); } })),
       h('div', { style: { display: 'flex', gap: '8px' } },
-        h('button', { onClick: function() { setApiKey(keyInput); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '\uC800\uC7A5'),
+        h('button', { onClick: function() { setApiKey(keyInput.trim()); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '\uC800\uC7A5'),
         h('button', { onClick: function() { setShowKey(false); }, style: mx(BTS, { flex: '1' }) }, '\uCDE8\uC18C')
       )
     ) : null,
@@ -1224,13 +1254,250 @@ function ExerScreen(props) {
 }
 
 /* ─── SIDE NAV ───────────────────────────────── */
+function SettingsScreen(props) {
+  var data = props.data, updS = props.updateSettings;
+  var settings = (data && data.__settings) || {};
+  var hs = useState(settings.height || '');          var heightV = hs[0], setHeightV = hs[1];
+  var as = useState(settings.age || '');             var ageV    = as[0], setAgeV    = as[1];
+  var gs = useState(settings.gender || 'male');      var genderV = gs[0], setGenderV = gs[1];
+  var ks = useState(getApiKey());                    var keyV    = ks[0], setKeyV    = ks[1];
+  var ss = useState(''); var saved = ss[0], setSaved = ss[1];
+  var ts = useState(localStorage.getItem('diet-theme') || 'default'); var theme = ts[0], setTheme = ts[1];
+
+  function saveProfile() {
+    updS({ height: parseFloat(heightV)||0, age: parseInt(ageV)||0, gender: genderV });
+    setSaved('profile');
+    setTimeout(function() { setSaved(''); }, 1800);
+  }
+  function saveKey() {
+    setApiKey(keyV.trim());
+    setSaved('api');
+    setTimeout(function() { setSaved(''); }, 1800);
+  }
+  function applyTheme(id) {
+    localStorage.setItem('diet-theme', id);
+    setTheme(id);
+    setTimeout(function() { window.location.reload(); }, 150);
+  }
+
+  var SEC = { marginBottom: '18px' };
+  var STITLE = { margin: '0 0 12px', fontSize: '15px', fontWeight: '700', color: C.tx };
+  var ROW = { display: 'flex', gap: '10px', marginBottom: '10px' };
+  var FIELD = function(label, val, setter, placeholder, type) {
+    return h('div', { style: { flex: 1 } },
+      h('label', { style: { display: 'block', fontSize: '12px', color: C.sub, marginBottom: '4px' } }, label),
+      h('input', { type: type||'number', placeholder: placeholder, value: val, onChange: function(e) { setter(e.target.value); }, style: INP })
+    );
+  };
+
+  return h('div', { className: 'screen' },
+    h('h1', { style: { margin: '0 0 20px', fontSize: '22px', fontWeight: '700' } }, '설정 ⚙️'),
+
+    h('div', { style: mx(CARD, SEC) },
+      h('p', { style: STITLE }, '👤 프로필'),
+      h('div', { style: ROW },
+        FIELD('키 (cm)', heightV, setHeightV, '예: 175'),
+        FIELD('나이', ageV, setAgeV, '예: 25')
+      ),
+      h('div', { style: { marginBottom: '10px' } },
+        h('label', { style: { display: 'block', fontSize: '12px', color: C.sub, marginBottom: '6px' } }, '성별'),
+        h('div', { style: { display: 'flex', gap: '8px' } },
+          ['male', 'female'].map(function(g) {
+            var on = genderV === g;
+            return h('button', {
+              key: g,
+              onClick: function() { setGenderV(g); },
+              style: { flex: 1, padding: '9px', borderRadius: '10px', fontSize: '13px', fontWeight: on ? '700' : '400', cursor: 'pointer', border: on ? '1.5px solid ' + C.acc : '1px solid ' + C.bd, background: on ? C.acc + '22' : 'transparent', color: on ? C.aL : C.sub }
+            }, g === 'male' ? '남성' : '여성');
+          })
+        )
+      ),
+      h('p', { style: { margin: '0 0 10px', fontSize: '11px', color: C.sub } }, '키·나이·성별은 칼로리 목표 계산에 사용됩니다'),
+      h('button', { onClick: saveProfile, style: BTP }, saved === 'profile' ? '✓ 저장됨' : '저장')
+    ),
+
+    h('div', { style: mx(CARD, SEC) },
+      h('p', { style: STITLE }, '🔑 API 키'),
+      h('p', { style: { margin: '0 0 10px', fontSize: '12px', color: C.sub } }, 'console.groq.com 에서 무료 발급 (사진 분석 · AI 상담)'),
+      h('div', { style: { marginBottom: '10px' } },
+        h('label', { style: { display: 'block', fontSize: '12px', color: C.sub, marginBottom: '4px' } }, 'Groq API 키'),
+        h('input', { type: 'password', placeholder: 'gsk_...', value: keyV, onChange: function(e) { setKeyV(e.target.value); }, style: INP })
+      ),
+      h('button', { onClick: saveKey, style: BTP }, saved === 'api' ? '✓ 저장됨' : '저장')
+    ),
+
+    h('div', { style: mx(CARD, SEC) },
+      h('p', { style: STITLE }, '🎨 배경색'),
+      h('p', { style: { margin: '0 0 6px', fontSize: '11px', color: C.sub, fontWeight: '600' } }, '🌙 다크'),
+      h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', marginBottom: '14px' } },
+        THEMES.filter(function(t) { return t.dark; }).map(function(t) {
+          var on = theme === t.id;
+          return h('button', { key: t.id, onClick: function() { applyTheme(t.id); }, style: { padding: '12px 6px', borderRadius: '12px', border: on ? '2px solid ' + t.aL : '2px solid transparent', background: t.card, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px' } },
+            h('div', { style: { width: '32px', height: '32px', borderRadius: '50%', background: t.acc, boxShadow: on ? '0 0 10px ' + t.acc : 'none' } }),
+            h('span', { style: { fontSize: '11px', color: on ? t.aL : '#888', fontWeight: on ? '700' : '400' } }, t.name)
+          );
+        })
+      ),
+      h('p', { style: { margin: '0 0 6px', fontSize: '11px', color: C.sub, fontWeight: '600' } }, '☀️ 라이트'),
+      h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' } },
+        THEMES.filter(function(t) { return !t.dark; }).map(function(t) {
+          var on = theme === t.id;
+          return h('button', { key: t.id, onClick: function() { applyTheme(t.id); }, style: { padding: '12px 6px', borderRadius: '12px', border: on ? '2px solid ' + t.aL : '2px solid transparent', background: t.card, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px' } },
+            h('div', { style: { width: '32px', height: '32px', borderRadius: '50%', background: t.acc, boxShadow: on ? '0 0 10px ' + t.acc : 'none' } }),
+            h('span', { style: { fontSize: '11px', color: on ? t.aL : '#666', fontWeight: on ? '700' : '400' } }, t.name)
+          );
+        })
+      )
+    )
+  );
+}
+
+function ChatScreen(props) {
+  var data = props.data, consumed = props.consumed, tgt = props.tgt, goal = props.goal;
+  var ms = useState([]); var msgs = ms[0], setMsgs = ms[1];
+  var is = useState(''); var input = is[0], setInput = is[1];
+  var ls = useState(false); var loading = ls[0], setLoading = ls[1];
+  var ks = useState(false); var showKey = ks[0], setShowKey = ks[1];
+  var kis = useState(''); var keyInput = kis[0], setKeyInput = kis[1];
+  var bottomRef = useRef(null);
+
+  useEffect(function() {
+    if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [msgs]);
+
+  function sendMsg() {
+    var text = input.trim();
+    if (!text || loading) return;
+    var apiKey = (getApiKey() || '').replace(/[^\x21-\x7E]/g,'').trim();
+    if (!apiKey) { setShowKey(true); return; }
+    var newMsgs = msgs.concat([{ role: 'user', text: text }]);
+    setMsgs(newMsgs);
+    setInput('');
+    setLoading(true);
+    var rem = tgt ? Math.round(tgt.cal - consumed.cal) : 0;
+    var tgtCal  = tgt ? Math.round(tgt.cal)  : goal;
+    var tgtPro  = tgt ? Math.round(tgt.pro)  : 0;
+    var tgtCarb = tgt ? Math.round(tgt.carb) : 0;
+    var tgtFat  = tgt ? Math.round(tgt.fat)  : 0;
+    var sysPrompt = [
+      '당신은 한국어 식단 관리 어시스턴트입니다. 반드시 한국어로만 답변하세요. 다른 언어(영어, 러시아어 등)를 절대 섞지 마세요.',
+      '',
+      '음식 영양정보를 답할 때는 반드시 다음 순서를 따르세요:',
+      '1. 해당 음식의 실제 칼로리/영양 수치를 농촌진흥청 식품성분표 또는 제조사 공식 수치 기준으로 정확히 산출하세요.',
+      '2. 확실하지 않은 수치는 추정 범위로 표시하세요. 예: "약 520~560kcal"',
+      '3. 수치를 구한 후, 아래 형식으로 사용자 현황과 비교해 답하세요.',
+      '',
+      '【오늘 현황】',
+      '목표: 칼로리 ' + tgtCal + 'kcal / 단백질 ' + tgtPro + 'g / 탄수화물 ' + tgtCarb + 'g / 지방 ' + tgtFat + 'g',
+      '섭취: 칼로리 ' + Math.round(consumed.cal) + 'kcal / 단백질 ' + Math.round(consumed.pro) + 'g / 탄수화물 ' + Math.round(consumed.carb) + 'g / 지방 ' + Math.round(consumed.fat) + 'g',
+      '남은: 칼로리 ' + rem + 'kcal / 단백질 ' + (tgtPro - Math.round(consumed.pro)) + 'g / 탄수화물 ' + (tgtCarb - Math.round(consumed.carb)) + 'g / 지방 ' + (tgtFat - Math.round(consumed.fat)) + 'g',
+      '',
+      '사용자가 특정 음식을 먹어도 되는지 물으면 아래 형식으로만 답하세요:',
+      '',
+      '[음식명] 예상 영양정보',
+      '• 칼로리: XXXkcal',
+      '• 단백질: XXg / 탄수화물: XXg / 지방: XXg',
+      '',
+      '먹은 후 남는 양',
+      '• 칼로리: XXXkcal (목표 대비 초과/여유)',
+      '• 단백질: XXg / 탄수화물: XXg / 지방: XXg',
+      '',
+      '✅ 먹어도 됩니다 또는 ⚠️ 주의 필요 또는 ❌ 초과됩니다',
+      '한 줄 코멘트',
+      '',
+      '음식 정보가 없는 질문엔 간단히 한국어로만 답하세요.'
+    ].join('\n');
+    var history = newMsgs.slice(-10).map(function(m) {
+      return { role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] };
+    });
+    var chatHistory = [{ role: 'system', content: sysPrompt }].concat(
+      newMsgs.slice(-10).map(function(m) { return { role: m.role === 'user' ? 'user' : 'assistant', content: m.text }; })
+    );
+    fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 600,
+        temperature: 0.1,
+        messages: chatHistory
+      })
+    }).then(function(r) {
+      if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t.slice(0,100)); });
+      return r.json();
+    }).then(function(d) {
+      var reply = (((d.choices||[])[0]||{}).message||{}).content || '응답을 받지 못했습니다.';
+      setMsgs(function(prev) { return prev.concat([{ role: 'model', text: reply }]); });
+      setLoading(false);
+    }).catch(function(e) {
+      var msg = e.message || '';
+      if (msg.indexOf('400') !== -1 || msg.indexOf('403') !== -1 || msg.indexOf('API key') !== -1) {
+        setShowKey(true);
+        setMsgs(function(prev) { return prev.concat([{ role: 'model', text: 'API 키가 유효하지 않습니다. 아래에서 키를 다시 입력해주세요. (console.groq.com에서 gsk_... 형태로 발급)' }]); });
+      } else {
+        setMsgs(function(prev) { return prev.concat([{ role: 'model', text: '오류: ' + msg }]); });
+      }
+      setLoading(false);
+    });
+  }
+
+  var bubbleStyle = function(isUser) { return {
+    maxWidth: '80%', padding: '10px 14px', borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+    background: isUser ? C.acc : C.card, color: C.tx, fontSize: '14px', lineHeight: '1.5',
+    alignSelf: isUser ? 'flex-end' : 'flex-start', whiteSpace: 'pre-wrap', wordBreak: 'break-word'
+  }; };
+
+  return h('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
+    h('div', { style: { padding: '14px 14px 10px', paddingTop: 'calc(env(safe-area-inset-top) + 14px)', borderBottom: '1px solid ' + C.bd, flexShrink: 0 } },
+      h('h1', { style: { margin: 0, fontSize: '20px', fontWeight: '700' } }, 'AI 식단 상담 🤖'),
+      h('p', { style: { margin: '2px 0 0', fontSize: '11px', color: C.sub } }, '남은 칼로리 ' + (tgt ? Math.round(tgt.cal - consumed.cal) : '-') + 'kcal · 오늘 ' + Math.round(consumed.cal) + 'kcal 섭취')
+    ),
+    showKey ? h('div', { style: { padding: '12px 14px', background: C.card, borderBottom: '1px solid ' + C.bd, flexShrink: 0 } },
+      h('p', { style: { margin: '0 0 6px', fontSize: '13px', fontWeight: '600', color: C.tx } }, 'Groq API 키 설정'),
+      h('p', { style: { margin: '0 0 8px', fontSize: '11px', color: C.sub } }, 'console.groq.com 에서 무료 발급'),
+      h('div', { style: { display: 'flex', gap: '8px' } },
+        h('input', { type: 'password', placeholder: 'gsk_...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); }, style: mx(INP, { flex: 1, margin: 0 }) }),
+        h('button', { onClick: function() { setApiKey(keyInput.trim()); setShowKey(false); }, style: mx(BTP, { width: 'auto', padding: '0 14px', margin: 0 }) }, '저장')
+      )
+    ) : null,
+    h('div', { style: { flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' } },
+      msgs.length === 0 ? h('div', { style: { textAlign: 'center', padding: '40px 20px', color: C.sub } },
+        h('div', { style: { fontSize: '40px', marginBottom: '12px' } }, '🤔'),
+        h('p', { style: { margin: '0 0 8px', fontWeight: '600', color: C.tx } }, '음식 먹어도 될지 물어보세요'),
+        h('p', { style: { margin: '0 0 4px', fontSize: '13px' } }, '"삼겹살 200g 먹어도 돼?"'),
+        h('p', { style: { margin: '0 0 4px', fontSize: '13px' } }, '"오늘 치킨 한 마리 칼로리 얼마야?"'),
+        h('p', { style: { margin: 0, fontSize: '13px' } }, '"단백질 더 먹어야 해?"')
+      ) : null,
+      msgs.map(function(m, i) {
+        return h('div', { key: i, style: { display: 'flex', flexDirection: 'column' } },
+          h('div', { style: bubbleStyle(m.role === 'user') }, m.text)
+        );
+      }),
+      loading ? h('div', { style: { display: 'flex', gap: '4px', padding: '10px 14px', alignSelf: 'flex-start' } },
+        h('div', { style: { width: '7px', height: '7px', borderRadius: '50%', background: C.sub, animation: 'pulse 1s infinite' } }),
+        h('div', { style: { width: '7px', height: '7px', borderRadius: '50%', background: C.sub, animation: 'pulse 1s infinite .2s' } }),
+        h('div', { style: { width: '7px', height: '7px', borderRadius: '50%', background: C.sub, animation: 'pulse 1s infinite .4s' } })
+      ) : null,
+      h('div', { ref: bottomRef })
+    ),
+    h('div', { style: { padding: '10px 14px', paddingBottom: 'calc(env(safe-area-inset-bottom) + 10px)', borderTop: '1px solid ' + C.bd, display: 'flex', gap: '8px', flexShrink: 0, background: C.bg } },
+      h('input', { type: 'text', placeholder: '음식 이름이나 질문을 입력하세요...', value: input, onChange: function(e) { setInput(e.target.value); },
+        onKeyDown: function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); } },
+        style: mx(INP, { flex: 1, margin: 0 }) }),
+      h('button', { onClick: sendMsg, disabled: loading || !input.trim(), style: mx(BTP, { width: 'auto', padding: '0 16px', margin: 0, opacity: (loading || !input.trim()) ? '0.5' : '1' }) }, '전송')
+    )
+  );
+}
+
 function SideNav(props) {
   var tab = props.tab, setTab = props.setTab;
   var items = [
     { k: 'dash',      icon: '🏠', l: '홈' },
     { k: 'body',      icon: '⚖️', l: '체중' },
     { k: 'nutrition', icon: '🍱', l: '영양' },
-    { k: 'exercise',  icon: '🏃', l: '운동' }
+    { k: 'exercise',  icon: '🏃', l: '운동' },
+    { k: 'chat',      icon: '🤖', l: 'AI 상담' },
+    { k: 'settings',  icon: '⚙️', l: '설정' }
   ];
   return h('div', { style: { width: '220px', background: C.card, borderRight: '1px solid ' + C.bd, display: 'flex', flexDirection: 'column', flexShrink: 0, height: '100%' } },
     h('div', { style: { padding: '28px 22px 22px', borderBottom: '1px solid ' + C.bd } },
@@ -1356,6 +1623,15 @@ function App() {
     });
   }
 
+  function updateSettings(patch) {
+    setData(function(prev) {
+      var next = Object.assign({}, prev);
+      next.__settings = Object.assign({}, prev.__settings || {}, patch);
+      saveData(next);
+      return next;
+    });
+  }
+
   function replaceData(d) {
     saveData(d);
     setData(d);
@@ -1367,12 +1643,15 @@ function App() {
 
   var goal = (data.__settings && data.__settings.goal != null) ? data.__settings.goal : DEF_GOAL;
   var weeklyLoss = (data.__settings && data.__settings.weeklyLoss != null) ? data.__settings.weeklyLoss : 0.5;
+  var userHT = (data.__settings && data.__settings.height) || HT;
+  var userAGE = (data.__settings && data.__settings.age) || AGE;
+  var isFemale = (data.__settings && data.__settings.gender === 'female');
   var td = data[TODAY] || { measurement: null, foods: [], exercises: [] };
   var w = (function() { var m0 = getM(td); return m0 ? m0.weight : 89.73; })();
   var exC = sumKey(td.exercises, 'calories');
-  var tgt = calcTgt(w, exC, weeklyLoss);
+  var tgt = calcTgt(w, exC, weeklyLoss, userHT, userAGE, isFemale);
   var cn = { cal: sumKey(td.foods, 'calories'), pro: sumKey(td.foods, 'protein'), fat: sumKey(td.foods, 'fat'), carb: sumKey(td.foods, 'carbs'), sug: sumKey(td.foods, 'sugar'), sod: sumKey(td.foods, 'sodium') };
-  var ctx = { data: data, updateData: updateData, updateGoal: updateGoal, updateWeeklyLoss: updateWeeklyLoss, td: td, tgt: tgt, consumed: cn, w: w, goal: goal, weeklyLoss: weeklyLoss, isWide: isWide, hkData: hkData , replaceData: replaceData };
+  var ctx = { data: data, updateData: updateData, updateGoal: updateGoal, updateWeeklyLoss: updateWeeklyLoss, updateSettings: updateSettings, td: td, tgt: tgt, consumed: cn, w: w, goal: goal, weeklyLoss: weeklyLoss, isWide: isWide, hkData: hkData, replaceData: replaceData };
 
   return h('div', { style: { display: 'flex', flexDirection: isWide ? 'row' : 'column', height: '100%', maxWidth: isWide ? 'none' : '430px', margin: isWide ? 0 : '0 auto', background: C.bg } },
     isWide ? h(SideNav, { tab: tab, setTab: setTab }) : null,
@@ -1380,13 +1659,17 @@ function App() {
       tab === 'dash'      ? h(DashScreen, ctx) : null,
       tab === 'body'      ? h(BodyScreen, ctx) : null,
       tab === 'nutrition' ? h(NutrScreen, ctx) : null,
-      tab === 'exercise'  ? h(ExerScreen, ctx) : null
+      tab === 'exercise'  ? h(ExerScreen, ctx) : null,
+      tab === 'chat'      ? h(ChatScreen, ctx) : null,
+      tab === 'settings'  ? h(SettingsScreen, ctx) : null
     ),
     !isWide ? h('nav', { className: 'nav' },
       h('button', { className: 'nb' + (tab === 'dash'      ? ' on' : ''), onClick: function() { setTab('dash');      } }, h('span', { className: 'ni' }, '\uD83C\uDFE0'), h('span', { className: 'nl' }, '\uD648')),
       h('button', { className: 'nb' + (tab === 'body'      ? ' on' : ''), onClick: function() { setTab('body');      } }, h('span', { className: 'ni' }, '\u2696\uFE0F'), h('span', { className: 'nl' }, '\uCCB4\uC911')),
       h('button', { className: 'nb' + (tab === 'nutrition' ? ' on' : ''), onClick: function() { setTab('nutrition'); } }, h('span', { className: 'ni' }, '\uD83C\uDF71'), h('span', { className: 'nl' }, '\uC601\uC591')),
-      h('button', { className: 'nb' + (tab === 'exercise'  ? ' on' : ''), onClick: function() { setTab('exercise');  } }, h('span', { className: 'ni' }, '\uD83C\uDFC3'), h('span', { className: 'nl' }, '\uC6B4\uB3D9'))
+      h('button', { className: 'nb' + (tab === 'exercise'  ? ' on' : ''), onClick: function() { setTab('exercise');  } }, h('span', { className: 'ni' }, '\uD83C\uDFC3'), h('span', { className: 'nl' }, '\uC6B4\uB3D9')),
+      h('button', { className: 'nb' + (tab === 'chat'      ? ' on' : ''), onClick: function() { setTab('chat');      } }, h('span', { className: 'ni' }, '\uD83E\uDD16'), h('span', { className: 'nl' }, 'AI\uC0C1\uB2F4')),
+      h('button', { className: 'nb' + (tab === 'settings'  ? ' on' : ''), onClick: function() { setTab('settings');  } }, h('span', { className: 'ni' }, '\u2699\uFE0F'), h('span', { className: 'nl' }, '\uC124\uC815'))
     ) : null
   );
 }
