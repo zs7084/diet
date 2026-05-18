@@ -18,7 +18,7 @@ input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radi
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:#6366f1;cursor:pointer}
 input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:#6366f1;border:none;cursor:pointer}
 .screen{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;padding-top:calc(env(safe-area-inset-top) + 14px);padding-bottom:calc(env(safe-area-inset-bottom) + 20px);height:100%}
-.nav{background:#13131e;border-top:1px solid #2a2a3a;display:flex;padding-bottom:env(safe-area-inset-bottom);flex-shrink:0}
+.nav{background:var(--card,#13131e);border-top:1px solid var(--bd,#2a2a3a);display:flex;padding-bottom:env(safe-area-inset-bottom);flex-shrink:0}
 .nb{flex:1;padding:10px 4px 8px;background:transparent;border:none;border-top:2px solid transparent;display:flex;flex-direction:column;align-items:center;gap:3px;color:#555;cursor:pointer;transition:color .2s,border-color .2s}
 .nb.on{color:#818cf8;border-top-color:#818cf8}
 @keyframes pulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
@@ -123,6 +123,9 @@ var THEMES = [
   document.documentElement.style.setProperty('--bg',   t.bg);
   document.documentElement.style.setProperty('--tx',   t.tx);
   document.documentElement.style.setProperty('--card', t.card);
+  document.documentElement.style.setProperty('--bd',   t.bd);
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', t.card);
 })();
 
 var C = (function() {
