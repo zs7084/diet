@@ -1440,33 +1440,40 @@ function ChatScreen(props) {
     var chatHistory = [{ role: 'system', content: sysPrompt }].concat(
       newMsgs.slice(-10).map(function(m) { return { role: m.role === 'user' ? 'user' : 'assistant', content: m.text }; })
     );
-    fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        max_tokens: 600,
-        temperature: 0.1,
-        messages: chatHistory
-      })
-    }).then(function(r) {
-      if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t.slice(0,100)); });
-      return r.json();
-    }).then(function(d) {
-      var reply = (((d.choices||[])[0]||{}).message||{}).content || '응답을 받지 못했습니다.';
-      setMsgs(function(prev) { return prev.concat([{ role: 'model', text: reply }]); });
-      setLoading(false);
-    }).catch(function(e) {
-      var msg = e.message || '';
-      if (msg.indexOf('400') !== -1 || msg.indexOf('401') !== -1 || msg.indexOf('403') !== -1 || msg.indexOf('API key') !== -1 || msg.indexOf('invalid') !== -1) {
-        setShowKey(true);
-        setMsgs(function(prev) { return prev.concat([{ role: 'model', text: 'API 키가 유효하지 않습니다. 아래에서 Groq 키를 다시 입력해주세요. (console.groq.com → API Keys → gsk_... 형태)' }]); });
-      } else {
-        setMsgs(function(prev) { return prev.concat([{ role: 'model', text: '오류: ' + msg }]); });
-      }
-      setLoading(false);
-    });
-  }
+    function doFetch(retrying) {
+      fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          max_tokens: 600,
+          temperature: 0.1,
+          messages: chatHistory
+        })
+      }).then(function(r) {
+        if (r.status === 401 && !retrying) {
+          setTimeout(function() { doFetch(true); }, 1500);
+          return null;
+        }
+        if (!r.ok) return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t.slice(0,100)); });
+        return r.json();
+      }).then(function(d) {
+        if (!d) return;
+        var reply = (((d.choices||[])[0]||{}).message||{}).content || '응답을 받지 못했습니다.';
+        setMsgs(function(prev) { return prev.concat([{ role: 'model', text: reply }]); });
+        setLoading(false);
+      }).catch(function(e) {
+        var msg = e.message || '';
+        if (msg.indexOf('401') !== -1 || msg.indexOf('400') !== -1 || msg.indexOf('403') !== -1 || msg.indexOf('API key') !== -1 || msg.indexOf('invalid') !== -1) {
+          setShowKey(true);
+          setMsgs(function(prev) { return prev.concat([{ role: 'model', text: 'API 키가 유효하지 않습니다. 아래에서 Groq 키를 다시 입력해주세요. (console.groq.com → API Keys → gsk_... 형태)' }]); });
+        } else {
+          setMsgs(function(prev) { return prev.concat([{ role: 'model', text: '오류: ' + msg }]); });
+        }
+        setLoading(false);
+      });
+    }
+    doFetch(false);
 
   var bubbleStyle = function(isUser) { return {
     maxWidth: '80%', padding: '10px 14px', borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
