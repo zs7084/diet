@@ -851,7 +851,15 @@ function NutrScreen(props) {
         h('p', { style: { margin: '0 0 10px', fontSize: '12px', color: C.sub } }, 'console.anthropic.com 에서 발급 가능해요.'),
         h('div', { style: { marginBottom: '11px' } }, h('label', { style: { display: 'block', fontSize: '12px', color: C.sub, marginBottom: '3px' } }, 'API 키 (sk-ant-...)'), h('input', { type: 'password', placeholder: 'sk-ant-api03-...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); }, style: INP })),
         h('div', { style: { display: 'flex', gap: '8px' } },
-          h('button', { onClick: function() { setApiKey(keyInput); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '저장'),
+          h('button', { onClick: function() {
+    setApiKey(keyInput);
+    setShowKey(false);
+    setTimeout(function() {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openPhotoPicker) {
+        window.webkit.messageHandlers.openPhotoPicker.postMessage({});
+      }
+    }, 300);
+  }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '저장'),
           h('button', { onClick: function() { setShowKey(false); }, style: mx(BTS, { flex: '1' }) }, '취소')
         )
       ) : null,
@@ -940,7 +948,15 @@ function NutrScreen(props) {
       h('p', { style: { margin: '0 0 10px', fontSize: '12px', color: C.sub } }, 'console.anthropic.com \uC5D0\uC11C \uBC1C\uAE09 \uAC00\uB2A5\uD574\uC694.'),
       h('div', { style: { marginBottom: '11px' } }, L('API \uD0A4 (sk-ant-...)'), I({ type: 'password', placeholder: 'sk-ant-api03-...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); } })),
       h('div', { style: { display: 'flex', gap: '8px' } },
-        h('button', { onClick: function() { setApiKey(keyInput); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '\uC800\uC7A5'),
+        h('button', { onClick: function() {
+    setApiKey(keyInput);
+    setShowKey(false);
+    setTimeout(function() {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.openPhotoPicker) {
+        window.webkit.messageHandlers.openPhotoPicker.postMessage({});
+      }
+    }, 300);
+  }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '\uC800\uC7A5'),
         h('button', { onClick: function() { setShowKey(false); }, style: mx(BTS, { flex: '1' }) }, '\uCDE8\uC18C')
       )
     ) : null,
