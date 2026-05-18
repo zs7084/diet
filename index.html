@@ -664,6 +664,7 @@ function NutrScreen(props) {
   var s5 = useState(false); var showKey = s5[0], setShowKey = s5[1];
   var s6 = useState(''); var keyInput = s6[0], setKeyInput = s6[1];
   var s7 = useState(null); var editingId = s7[0], setEditingId = s7[1];
+  var s8 = useState(''); var analyzeErr = s8[0], setAnalyzeErr = s8[1];
   var fileRef = useRef(null);
   var rem = { cal: t.cal - cn.cal, pro: t.pro - cn.pro, carb: t.carb - cn.carb, fat: t.fat - cn.fat, sod: t.sod - cn.sod };
 
@@ -688,9 +689,9 @@ function NutrScreen(props) {
         setForm({ name: r2.name || '', cal: '' + (r2.cal || ''), pro: '' + (r2.pro || ''), carb: '' + (r2.carb || ''), fat: '' + (r2.fat || ''), sug: '' + (r2.sug || ''), meal: form.meal || '아침' });
         setMode('manual');
         setAnalyzing(false);
-      }).catch(function(e) { alert('\uBD84\uC11D \uC2E4\uD328: ' + e.message); setAnalyzing(false); });
+      }).catch(function(e) { setAnalyzeErr('분석 실패: ' + e.message); setAnalyzing(false); });
     };
-    reader.onerror = function() { alert('\uD30C\uC77C \uC624\uB958'); setAnalyzing(false); };
+    reader.onerror = function() { setAnalyzeErr('파일 읽기 오류'); setAnalyzing(false); };
     reader.readAsDataURL(file);
   }
 
@@ -854,7 +855,8 @@ function NutrScreen(props) {
               h('div', { style: { fontSize: '36px', marginBottom: '8px' } }, '📸'),
               h('p', { style: { margin: '0 0 12px', fontSize: '12px', color: C.sub } }, '추기사진하면 Claude AI가 영양정보를 분석해요'),
               h('input', { ref: fileRef, type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: function(e) { if (e.target.files && e.target.files[0]) analyzePhoto(e.target.files[0]); } }),
-              h('button', { onClick: function() { if (fileRef.current) fileRef.current.click(); }, disabled: analyzing, style: mx(BTP, { opacity: analyzing ? '0.5' : '1' }) }, analyzing ? '분석 중...' : '사진 선택 / 촬영'),
+              h('button', { onClick: function() { setAnalyzeErr(''); if (fileRef.current) fileRef.current.click(); }, disabled: analyzing, style: mx(BTP, { opacity: analyzing ? '0.5' : '1' }) }, analyzing ? '분석 중...' : '사진 선택 / 촬영'),
+              analyzeErr ? h('p', { style: { margin: '8px 0 0', fontSize: '12px', color: C.ce, textAlign: 'center' } }, analyzeErr) : null,
               h('button', { onClick: function() { setShowKey(true); }, style: { background: 'none', border: 'none', color: C.aL, fontSize: '11px', cursor: 'pointer', marginTop: '8px', textDecoration: 'underline' } }, 'API 키 설정')
             ) : h('div', null,
               mealRow,
@@ -907,7 +909,8 @@ function NutrScreen(props) {
         h('div', { style: { fontSize: '36px', marginBottom: '8px' } }, '\uD83D\uDCF8'),
         h('p', { style: { margin: '0 0 12px', fontSize: '12px', color: C.sub } }, '\uCD94\uAE30\uC0AC\uC9C4\uD558\uBA74 Claude AI\uAC00 \uC601\uC591\uC815\uBCF4\uB97C \uBD84\uC11D\uD574\uC694'),
         h('input', { ref: fileRef, type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: function(e) { if (e.target.files && e.target.files[0]) analyzePhoto(e.target.files[0]); } }),
-        h('button', { onClick: function() { if (fileRef.current) fileRef.current.click(); }, disabled: analyzing, style: mx(BTP, { opacity: analyzing ? '0.5' : '1' }) }, analyzing ? '\uBD84\uC11D \uC911...' : '\uC0AC\uC9C4 \uC120\uD0DD / \uCD2C\uC601'),
+        h('button', { onClick: function() { setAnalyzeErr(''); if (fileRef.current) fileRef.current.click(); }, disabled: analyzing, style: mx(BTP, { opacity: analyzing ? '0.5' : '1' }) }, analyzing ? '\uBD84\uC11D \uC911...' : '\uC0AC\uC9C4 \uC120\uD0DD / \uCD2C\uC601'),
+        analyzeErr ? h('p', { style: { margin: '8px 0 0', fontSize: '12px', color: C.ce, textAlign: 'center' } }, analyzeErr) : null,
         h('button', { onClick: function() { setShowKey(true); }, style: { background: 'none', border: 'none', color: C.aL, fontSize: '11px', cursor: 'pointer', marginTop: '8px', textDecoration: 'underline' } }, 'API \uD0A4 \uC124\uC815')
       ) : h('div', null,
         mealRow,
