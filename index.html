@@ -79,6 +79,21 @@ function fbListen(callback) {
       if (doc.exists && !doc.metadata.hasPendingWrites) callback(doc.data().json);
     }, function() {});
 }
+var fbChatTimer = null;
+function fbSaveChat(msgs) {
+  if (!fbDb) return;
+  if (fbChatTimer) clearTimeout(fbChatTimer);
+  fbChatTimer = setTimeout(function() {
+    fbDb.collection('data').doc('chat').set({ msgs: msgs, ts: Date.now() }).catch(function() {});
+  }, 1000);
+}
+function fbListenChat(callback) {
+  if (!fbDb) return function() {};
+  return fbDb.collection('data').doc('chat')
+    .onSnapshot({ includeMetadataChanges: false }, function(doc) {
+      if (doc.exists && !doc.metadata.hasPendingWrites) callback(doc.data().msgs || []);
+    }, function() {});
+}
 var DEF_GOAL = 75.0;
 var HT = 176.5;
 var AGE = 29;
@@ -1586,7 +1601,19 @@ function App() {
 
   useEffect(function() {
     try { localStorage.setItem('diet-chat', JSON.stringify(chatMsgs)); } catch(e) {}
+    fbSaveChat(chatMsgs);
   }, [chatMsgs]);
+
+  useEffect(function() {
+    var unsub = fbListenChat(function(msgs) {
+      setChatMsgs(function(prev) {
+        if (JSON.stringify(prev) === JSON.stringify(msgs)) return prev;
+        try { localStorage.setItem('diet-chat', JSON.stringify(msgs)); } catch(e) {}
+        return msgs;
+      });
+    });
+    return unsub;
+  }, []);
 
   useEffect(function() {
     window.receiveHealthKitData = function(d) { setHkData(d); };
