@@ -1357,7 +1357,7 @@ function SettingsScreen(props) {
 
 function ChatScreen(props) {
   var data = props.data, consumed = props.consumed, tgt = props.tgt, goal = props.goal;
-  var ms = useState([]); var msgs = ms[0], setMsgs = ms[1];
+  var msgs = props.chatMsgs, setMsgs = props.setChatMsgs;
   var is = useState(''); var input = is[0], setInput = is[1];
   var ls = useState(false); var loading = ls[0], setLoading = ls[1];
   var ks = useState(false); var showKey = ks[0], setShowKey = ks[1];
@@ -1452,7 +1452,13 @@ function ChatScreen(props) {
 
   return h('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
     h('div', { style: { padding: '14px 14px 10px', paddingTop: 'calc(env(safe-area-inset-top) + 14px)', borderBottom: '1px solid ' + C.bd, flexShrink: 0 } },
-      h('h1', { style: { margin: 0, fontSize: '20px', fontWeight: '700' } }, 'AI 식단 상담 🤖'),
+      h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
+        h('h1', { style: { margin: 0, fontSize: '20px', fontWeight: '700' } }, 'AI 식단 상담 🤖'),
+        msgs.length > 0 ? h('button', {
+          onClick: function() { setMsgs([]); },
+          style: { background: 'none', border: '1px solid ' + C.bd, borderRadius: '8px', color: C.sub, fontSize: '12px', padding: '5px 10px', cursor: 'pointer' }
+        }, '대화 삭제') : null
+      ),
       h('p', { style: { margin: '2px 0 0', fontSize: '11px', color: C.sub } }, '남은 칼로리 ' + (tgt ? Math.round(tgt.cal - consumed.cal) : '-') + 'kcal · 오늘 ' + Math.round(consumed.cal) + 'kcal 섭취')
     ),
     showKey ? h('div', { style: { padding: '12px 14px', background: C.card, borderBottom: '1px solid ' + C.bd, flexShrink: 0 } },
@@ -1539,6 +1545,7 @@ function App() {
   var ds = useState(null); var data = ds[0], setData = ds[1];
   var ws = useState(window.innerWidth > 700); var isWide = ws[0], setIsWide = ws[1];
   var hks = useState(null); var hkData = hks[0], setHkData = hks[1];
+  var cms = useState([]); var chatMsgs = cms[0], setChatMsgs = cms[1];
 
   useEffect(function() {
     var local = loadData();
@@ -1654,7 +1661,7 @@ function App() {
   var exC = sumKey(td.exercises, 'calories');
   var tgt = calcTgt(w, exC, weeklyLoss, userHT, userAGE, isFemale);
   var cn = { cal: sumKey(td.foods, 'calories'), pro: sumKey(td.foods, 'protein'), fat: sumKey(td.foods, 'fat'), carb: sumKey(td.foods, 'carbs'), sug: sumKey(td.foods, 'sugar'), sod: sumKey(td.foods, 'sodium') };
-  var ctx = { data: data, updateData: updateData, updateGoal: updateGoal, updateWeeklyLoss: updateWeeklyLoss, updateSettings: updateSettings, td: td, tgt: tgt, consumed: cn, w: w, goal: goal, weeklyLoss: weeklyLoss, isWide: isWide, hkData: hkData, replaceData: replaceData };
+  var ctx = { data: data, updateData: updateData, updateGoal: updateGoal, updateWeeklyLoss: updateWeeklyLoss, updateSettings: updateSettings, td: td, tgt: tgt, consumed: cn, w: w, goal: goal, weeklyLoss: weeklyLoss, isWide: isWide, hkData: hkData, replaceData: replaceData, chatMsgs: chatMsgs, setChatMsgs: setChatMsgs };
 
   return h('div', { style: { display: 'flex', flexDirection: isWide ? 'row' : 'column', height: '100%', maxWidth: isWide ? 'none' : '430px', margin: isWide ? 0 : '0 auto', background: C.bg } },
     isWide ? h(SideNav, { tab: tab, setTab: setTab }) : null,
