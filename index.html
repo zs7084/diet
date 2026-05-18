@@ -770,7 +770,7 @@ function NutrScreen(props) {
     mealBtn('아침','🌅'), mealBtn('점심','☀️'), mealBtn('저녁','🌙'), mealBtn('간식','🍪'));
 
 
-  var hkAlreadyAdded = (td.foods || []).some(function(f) { return f.name === '건강 앱 식이'; });
+  var hkAlreadyAdded = !!(td.hkFoodAdded);
   var hkFoodCard = hkData && hkData.dietaryCalories > 0 ? h('div', { style: mx(CARD, { borderLeft: '3px solid ' + C.cc }) },
     h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
       h('div', null,
@@ -781,7 +781,7 @@ function NutrScreen(props) {
         h('p', { style: { margin: '0 0 4px', fontSize: '22px', fontWeight: '700', color: C.cc } }, hkData.dietaryCalories + ' kcal'),
         h('button', {
           onClick: function() {
-            updD(TODAY, { foods: (td.foods || []).concat([{ id: Date.now(), name: '건강 앱 식이', meal: '기타', grams: 0, calories: hkData.dietaryCalories, protein: hkData.dietaryProtein || 0, carbs: hkData.dietaryCarb || 0, fat: hkData.dietaryFat || 0, sugar: hkData.dietarySugar || 0, sodium: hkData.dietarySodium || 0, time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) }]) });
+            updD(TODAY, { foods: (td.foods || []).concat([{ id: Date.now(), name: '건강 앱 식이', meal: '기타', grams: 0, calories: hkData.dietaryCalories, protein: hkData.dietaryProtein || 0, carbs: hkData.dietaryCarb || 0, fat: hkData.dietaryFat || 0, sugar: hkData.dietarySugar || 0, sodium: hkData.dietarySodium || 0, time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) }]), hkFoodAdded: true });
           },
           disabled: hkAlreadyAdded, style: { background: 'none', border: '1px solid ' + (hkAlreadyAdded ? C.sub : C.cc), borderRadius: '8px', color: hkAlreadyAdded ? C.sub : C.cc, fontSize: '11px', padding: '4px 9px', cursor: hkAlreadyAdded ? 'default' : 'pointer' }
         }, hkAlreadyAdded ? '✓ 이미 추가됨' : '+ 식단에 추가')
