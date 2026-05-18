@@ -1545,7 +1545,9 @@ function App() {
   var ds = useState(null); var data = ds[0], setData = ds[1];
   var ws = useState(window.innerWidth > 700); var isWide = ws[0], setIsWide = ws[1];
   var hks = useState(null); var hkData = hks[0], setHkData = hks[1];
-  var cms = useState([]); var chatMsgs = cms[0], setChatMsgs = cms[1];
+  var cms = useState(function() {
+    try { return JSON.parse(localStorage.getItem('diet-chat') || '[]'); } catch(e) { return []; }
+  }); var chatMsgs = cms[0], setChatMsgs = cms[1];
 
   useEffect(function() {
     var local = loadData();
@@ -1581,6 +1583,10 @@ function App() {
     window.addEventListener('resize', onResize);
     return function() { window.removeEventListener('resize', onResize); };
   }, []);
+
+  useEffect(function() {
+    try { localStorage.setItem('diet-chat', JSON.stringify(chatMsgs)); } catch(e) {}
+  }, [chatMsgs]);
 
   useEffect(function() {
     window.receiveHealthKitData = function(d) { setHkData(d); };
