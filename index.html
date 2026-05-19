@@ -738,10 +738,22 @@ function BodyScreen(props) {
     var prev = getM(td);
     if (editId) {
       var dk = editDate || TODAY;
-      updD(dk, { measurements: getAllM(data[dk] || {}).map(function(m) {
-        if (m.id !== editId) return m;
-        return mx(m, { weight: ww, muscle: parseFloat(form.muscle) || m.muscle, fatPct: parseFloat(form.fatPct) || m.fatPct });
-      }) });
+      if (typeof editId === 'string' && editId.indexOf('@@') >= 0) {
+        var editIdx = parseInt(editId.split('@@')[1]);
+        var allMsRevEdit = getAllM(data[dk] || {}).slice().reverse();
+        var origEntry = allMsRevEdit[editIdx];
+        if (origEntry) {
+          updD(dk, { measurements: getAllM(data[dk] || {}).map(function(m) {
+            if (m !== origEntry) return m;
+            return mx(m, { id: Date.now(), weight: ww, muscle: parseFloat(form.muscle) || m.muscle, fatPct: parseFloat(form.fatPct) || m.fatPct });
+          }) });
+        }
+      } else {
+        updD(dk, { measurements: getAllM(data[dk] || {}).map(function(m) {
+          if (m.id !== editId) return m;
+          return mx(m, { weight: ww, muscle: parseFloat(form.muscle) || m.muscle, fatPct: parseFloat(form.fatPct) || m.fatPct });
+        }) });
+      }
       setEditId(null); setEditDate(null);
     } else {
       var entry = { id: Date.now(), weight: ww, muscle: parseFloat(form.muscle) || (prev ? prev.muscle : 0), fatPct: parseFloat(form.fatPct) || (prev ? prev.fatPct : 0), time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) };
@@ -755,9 +767,9 @@ function BodyScreen(props) {
     dk = dk || TODAY;
     updD(dk, { measurements: getAllM(data[dk] || {}).filter(function(m) { return m.id !== id; }) });
   }
-  function startEdit(m2, dk) {
+  function startEdit(m2, dk, entryKey) {
     setForm({ weight: '' + m2.weight, muscle: '' + m2.muscle, fatPct: '' + m2.fatPct });
-    setEditId(m2.id); setEditDate(dk || TODAY);
+    setEditId(entryKey !== undefined ? entryKey : m2.id); setEditDate(dk || TODAY);
     setHistEditMode(false); setHistSelId(null); setHistSelDate(null);
   }
   function histHeader(hasAny) {
@@ -767,13 +779,27 @@ function BodyScreen(props) {
         ? h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } },
             h('button', { onClick: function() {
                 if (!histSelId || !histSelDate) return;
-                var en = getAllM(data[histSelDate] || {}).filter(function(m) { return m.id === histSelId; })[0];
-                if (en) startEdit(en, histSelDate);
+                var allMsRev = getAllM(data[histSelDate] || {}).slice().reverse();
+                var en;
+                if (histSelId.indexOf('@@') >= 0) {
+                  en = allMsRev[parseInt(histSelId.split('@@')[1])];
+                  if (en) startEdit(en, histSelDate, histSelId);
+                } else {
+                  en = allMsRev.filter(function(m) { return String(m.id) === histSelId; })[0];
+                  if (en) startEdit(en, histSelDate);
+                }
               },
               style: { background: 'none', border: '1px solid ' + (histSelId ? C.acc : C.bd), borderRadius: '8px', color: histSelId ? C.aL : C.sub, padding: '3px 10px', fontSize: '12px', cursor: histSelId ? 'pointer' : 'default' } }, '편집'),
             h('button', { onClick: function() {
                 if (!histSelId || !histSelDate) return;
-                deleteBodyEntry(histSelId, histSelDate);
+                if (histSelId.indexOf('@@') >= 0) {
+                  var delIdx = parseInt(histSelId.split('@@')[1]);
+                  var allMsRevDel = getAllM(data[histSelDate] || {}).slice().reverse();
+                  var toDelete = allMsRevDel[delIdx];
+                  if (toDelete) updD(histSelDate, { measurements: getAllM(data[histSelDate] || {}).filter(function(m) { return m !== toDelete; }) });
+                } else {
+                  deleteBodyEntry(histSelId, histSelDate);
+                }
                 setHistEditMode(false); setHistSelId(null); setHistSelDate(null);
               },
               style: { background: 'none', border: '1px solid ' + (histSelId ? '#ef4444' : C.bd), borderRadius: '8px', color: histSelId ? '#ef4444' : C.sub, padding: '3px 10px', fontSize: '12px', cursor: histSelId ? 'pointer' : 'default' } }, '삭제'),
@@ -792,10 +818,13 @@ function BodyScreen(props) {
       var multi = ms.length > 1;
       return h('div', { key: k },
         h('div', { style: { fontSize: '11px', color: C.sub, padding: '8px 0 3px', borderBottom: '1px solid ' + C.bd } }, k),
-        ms.map(function(m2) {
-          var isSel = histSelId === m2.id;
-          return h('div', { key: '' + (m2.id || k),
-            onClick: histEditMode ? function() { setHistSelId(isSel ? null : m2.id); setHistSelDate(isSel ? null : k); } : undefined,
+        ms.map(function(m2, mIdx) {
+          var entryKey = m2.id != null ? String(m2.id) : (k + '@@' + mIdx);
+          var isSel = histSelId === entryKey;
+          return h('div', { key: entryKey,
+            onClick: histEditMode ? function() {
+              setHistSelId(isSel ? null : entryKey); setHistSelDate(isSel ? null : k);
+            } : undefined,
             style: { display: 'flex', alignItems: 'center', padding: '7px 0 7px 8px', borderBottom: '1px solid ' + C.bd, cursor: histEditMode ? 'pointer' : 'default' } },
             histEditMode ? h('div', { style: { width: '15px', height: '15px', borderRadius: '50%', border: '2px solid ' + (isSel ? C.acc : C.sub), background: isSel ? C.acc : 'transparent', marginRight: '8px', flexShrink: 0 } }) : null,
             h('div', { style: { display: 'flex', gap: '10px', fontSize: '13px', alignItems: 'center', flexWrap: 'wrap' } },
@@ -1435,7 +1464,7 @@ function ExerScreen(props) {
           h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '× 닫기' : '+ 추가')
         )
       ),
-      h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' } },
+      h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' } },
         h('div', null,
           h('div', { style: CARD },
             h('p', { style: CTITL }, fmtDate(selDate) + '의 칼로리 균형'),
@@ -1483,8 +1512,8 @@ function ExerScreen(props) {
             h('button', { onClick: addExercise, style: BTP }, '추가하기')
           ) : null
         ),
-        h('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
-          h('div', { style: mx(CARD, { flex: 1, marginBottom: 0 }) },
+        h('div', null,
+          h('div', { style: CARD },
             h('p', { style: CTITL }, fmtDate(selDate) + '의 운동'),
             !(td.exercises && td.exercises.length) ? h('p', { style: { margin: 0, textAlign: 'center', fontSize: '13px', color: C.sub, padding: '16px 0' } }, '운동 기록이 없어요') :
             (td.exercises || []).map(function(ex) {
