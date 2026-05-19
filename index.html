@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#080812">
-<title>다이어트 트래커</title>
+<title>Health Assistant</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg,#080812);color:var(--tx,#f0f0f0);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;-webkit-tap-highlight-color:transparent;overflow:hidden}
@@ -14,9 +14,9 @@ html,body{height:100%;background:var(--bg,#080812);color:var(--tx,#f0f0f0);font-
 button{cursor:pointer;font-family:inherit}
 button:active{opacity:.75}
 input{font-family:inherit}
-input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;background:#2a2a3a;cursor:pointer;border:none;width:100%}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:#6366f1;cursor:pointer}
-input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:#6366f1;border:none;cursor:pointer}
+input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:3px;background:var(--bd,#2a2a3a);cursor:pointer;border:none;width:100%}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:var(--acc,#6366f1);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--acc,#6366f1);border:none;cursor:pointer}
 .screen{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;padding-top:calc(env(safe-area-inset-top) + 14px);padding-bottom:calc(env(safe-area-inset-bottom) + 20px);height:100%}
 .nav{background:var(--card,#13131e);border-top:1px solid var(--bd,#2a2a3a);display:flex;padding-bottom:env(safe-area-inset-bottom);flex-shrink:0}
 .nb{flex:1;padding:10px 4px 8px;background:transparent;border:none;border-top:2px solid transparent;display:flex;flex-direction:column;align-items:center;gap:3px;color:#555;cursor:pointer;transition:color .2s,border-color .2s}
@@ -104,6 +104,16 @@ var TODAY = (function() {
     String(d.getMonth() + 1).padStart(2, '0') + '-' +
     String(d.getDate()).padStart(2, '0');
 })();
+var DAILY_EMOJI = (function() {
+  var list = ['🏋️','🤸','🚴','🏊','🧘','🤾','⛹️','🏄','🧗','🤺','🥊','🏇','🚵','🤼','🏌️'];
+  var stored = localStorage.getItem('dailyEmoji');
+  var storedDate = localStorage.getItem('dailyEmojiDate');
+  if (storedDate === TODAY && stored) return stored;
+  var picked = list[Math.floor(Math.random() * list.length)];
+  localStorage.setItem('dailyEmoji', picked);
+  localStorage.setItem('dailyEmojiDate', TODAY);
+  return picked;
+})();
 var HIST = [
   { date: '2025-07-07', weight: 89.09, muscle: 36.59, fatPct: 28.3 },
   { date: '2025-10-06', weight: 80.67, muscle: 35.41, fatPct: 22.4 }
@@ -139,6 +149,7 @@ var THEMES = [
   document.documentElement.style.setProperty('--tx',   t.tx);
   document.documentElement.style.setProperty('--card', t.card);
   document.documentElement.style.setProperty('--bd',   t.bd);
+  document.documentElement.style.setProperty('--acc',  t.acc);
   var meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', t.card);
 })();
@@ -188,7 +199,7 @@ function calcBMR(w, ht, age, isFemale) {
 }
 function calcTDEE(w, ht, age, isFemale) { return Math.round(calcBMR(w, ht, age, isFemale) * 1.375); }
 function calcTgt(w, exC, weeklyLoss, ht, age, isFemale) {
-  w = w || 89.73; exC = exC || 0; weeklyLoss = weeklyLoss || 0.5;
+  w = w || 89.73; exC = exC || 0; weeklyLoss = (weeklyLoss != null ? weeklyLoss : 0.5);
   ht = ht || HT; age = age || AGE;
   var b = calcBMR(w, ht, age, isFemale), t = calcTDEE(w, ht, age, isFemale);
   var deficit = Math.round(weeklyLoss * 1100);
@@ -217,22 +228,45 @@ var BTS   = { background: 'transparent', color: C.sub, border: '1px solid ' + C.
 
 /* ─── SVG LINE CHART (no external library) ───── */
 function LineChart(props) {
+  var containerRef = useRef(null);
+  var wSt = useState(340); var dynW = wSt[0]; var setDynW = wSt[1];
+  useEffect(function() {
+    var el = containerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    var ro = new ResizeObserver(function(entries) {
+      var w = Math.round(entries[0].contentRect.width);
+      if (w > 50) setDynW(w);
+    });
+    ro.observe(el);
+    return function() { ro.disconnect(); };
+  }, []);
   var data = props.data || [];
   var color = props.color || C.cc;
   var domain = props.domain || [0, 100];
   var goal = props.goal;
   var unit = props.unit || '';
-  var W = 340, H = props.height || 170, pL = 36, pR = 26, pT = 22, pB = 28;
+  var W = Math.min(dynW - 24, 360), H = props.height || 148, pL = 36, pR = 26, pT = 14, pB = 36;
+  if (W < 100) W = 100;
   var cW = W - pL - pR, cH = H - pT - pB;
   var minV = domain[0], maxV = domain[1];
-  function xP(i) { return data.length <= 1 ? pL + cW / 2 : pL + (i / (data.length - 1)) * cW; }
+  var n = data.length;
+  /* inner horizontal padding: wide enough so value labels (middle-anchored) don't overflow */
+  var iPad = n > 1 ? 22 : 0;
+  function xP(i) { return n <= 1 ? pL + cW / 2 : pL + iPad + (i / (n - 1)) * (cW - 2 * iPad); }
   function yP(v) { var c = Math.min(maxV, Math.max(minV, v)); return pT + (1 - (c - minV) / (maxV - minV)) * cH; }
-  var pathD = '';
-  if (data.length > 1) {
-    pathD = data.map(function(d, i) { return (i === 0 ? 'M' : 'L') + xP(i).toFixed(1) + ',' + yP(d.value).toFixed(1); }).join(' ');
-  }
+  var pts = n > 0 ? data.map(function(d, i) { return [xP(i), yP(d.value)]; }) : [];
+  var pathD = pts.length > 1 ? pts.map(function(p, i) { return (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ') : '';
+  var areaD = pathD ? pathD + ' L' + pts[pts.length-1][0].toFixed(1) + ',' + (pT + cH).toFixed(1) + ' L' + pts[0][0].toFixed(1) + ',' + (pT + cH).toFixed(1) + ' Z' : '';
+  var gradId = 'lg' + color.replace(/[^a-zA-Z0-9]/g, '');
   var ticks = [0, 1, 2, 3].map(function(i) { return minV + (maxV - minV) * i / 3; });
   var elems = [];
+  /* gradient fill */
+  elems.push(h('defs', { key: 'defs' },
+    h('linearGradient', { id: gradId, x1: '0', y1: '' + pT, x2: '0', y2: '' + (pT + cH), gradientUnits: 'userSpaceOnUse' },
+      h('stop', { offset: '0%',   stopColor: color, stopOpacity: '0.18' }),
+      h('stop', { offset: '100%', stopColor: color, stopOpacity: '0.01' })
+    )
+  ));
   ticks.forEach(function(v, i) {
     var y = yP(v);
     elems.push(h('line', { key: 'gl' + i, x1: pL, y1: y, x2: W - pR, y2: y, stroke: C.bd, strokeWidth: 1 }));
@@ -242,21 +276,32 @@ function LineChart(props) {
     elems.push(h('line', { key: 'gr', x1: pL, y1: yP(goal), x2: W - pR, y2: yP(goal), stroke: C.acc, strokeWidth: 1.5, strokeDasharray: '5 4' }));
     elems.push(h('text', { key: 'grl', x: W - pR + 3, y: yP(goal) + 4, fill: C.aL, fontSize: 9 }, '목표'));
   }
+  if (areaD) { elems.push(h('path', { key: 'ar', d: areaD, fill: 'url(#' + gradId + ')' })); }
   if (pathD) { elems.push(h('path', { key: 'ln', d: pathD, fill: 'none', stroke: color, strokeWidth: 2.5, strokeLinecap: 'round', strokeLinejoin: 'round' })); }
   var onClickPoint = props.onClickPoint;
   var selectedIndex = props.selectedIndex != null ? props.selectedIndex : -1;
+  /* show a max of ~7 labels so they don't overlap; always show first, last, selected */
+  var MAX_LBL = 7;
+  var step = n > MAX_LBL ? Math.ceil((n - 1) / (MAX_LBL - 1)) : 1;
   data.forEach(function(d, i) {
     var x = xP(i), y = yP(d.value);
     var isSel = selectedIndex === i;
-    elems.push(h('text',   { key: 'vl' + i, x: x, y: y - 9, textAnchor: 'middle', fill: isSel ? '#fff' : color, fontSize: isSel ? 11 : 10, fontWeight: '700' }, '' + d.value + unit));
-    elems.push(h('circle', { key: 'dt' + i, cx: x, cy: y, r: isSel ? 9 : 5, fill: color, stroke: isSel ? '#fff' : '#13131e', strokeWidth: isSel ? 3 : 2 }));
-    elems.push(h('text',   { key: 'xl' + i, x: x, y: H - 4, textAnchor: 'middle', fill: isSel ? C.aL : '#555', fontSize: 9, fontWeight: isSel ? '700' : '400' }, d.lbl));
+    var show = isSel || n <= MAX_LBL || i === 0 || i === n - 1 || (i % step === 0);
+    if (show) {
+      elems.push(h('text', { key: 'vl' + i, x: x, y: y - 9, textAnchor: 'middle', fill: isSel ? '#fff' : color, fontSize: isSel ? 11 : 10, fontWeight: '700' }, '' + d.value + unit));
+    }
+    elems.push(h('circle', { key: 'dt' + i, cx: x, cy: y, r: isSel ? 9 : (show ? 4.5 : 3), fill: show ? color : color + '70', stroke: isSel ? '#fff' : 'none', strokeWidth: isSel ? 3 : 0 }));
+    if (show) {
+      elems.push(h('text', { key: 'xl' + i, x: x, y: H - 4, textAnchor: 'middle', fill: isSel ? C.aL : '#555', fontSize: 9, fontWeight: isSel ? '700' : '400' }, d.lbl));
+    }
     if (onClickPoint) {
       elems.push(h('circle', { key: 'hx' + i, cx: x, cy: y, r: 20, fill: 'transparent', style: { cursor: 'pointer' },
         onClick: (function(idx) { return function() { onClickPoint(idx); }; })(i) }));
     }
   });
-  return h('svg', { viewBox: '0 0 ' + W + ' ' + H, style: { width: '100%', height: H + 'px', display: 'block', overflow: 'visible' } }, elems);
+  return h('div', { ref: containerRef, style: { width: '100%', padding: '0 12px 6px', display: 'flex', justifyContent: 'center' } },
+    h('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, style: { display: 'block', overflow: 'visible', maxWidth: '100%' } }, elems)
+  );
 }
 
 /* ─── RING ───────────────────────────────────── */
@@ -335,9 +380,9 @@ function GoalSlider(props) {
         h('span', { style: { fontSize: '12px', color: C.sub } }, '1주일당 감소량'),
         h('span', { style: { fontSize: '14px', fontWeight: '700', color: C.cm } }, wlv.toFixed(1) + ' kg / 주')
       ),
-      h('input', { type: 'range', min: 0.3, max: 1.0, step: 0.1, value: wlv, onChange: function(e) { onWLChange(e.target.value); }, style: { margin: '2px 0 4px' } }),
+      h('input', { type: 'range', min: 0.0, max: 1.0, step: 0.1, value: wlv, onChange: function(e) { onWLChange(e.target.value); }, style: { margin: '2px 0 4px', accentColor: C.cm, width: '100%' } }),
       h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: C.sub } },
-        h('span', null, '0.3 kg (느리게)'), h('span', null, '1.0 kg (빠르게)')
+        h('span', null, '0.0 kg'), h('span', null, '0.5 kg'), h('span', null, '1.0 kg')
       )
     ),
     h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '6px', textAlign: 'center' } },
@@ -362,37 +407,53 @@ function DashScreen(props) {
   var dvm = useState('daily'); var dashView = dvm[0], setDashView = dvm[1];
   var dsd = useState(null); var dashSelDate = dsd[0], setDashSelDate = dsd[1];
   var bks = useState(false); var showBackup = bks[0], setShowBackup = bks[1];
+  var dct = useState('weight'); var dashChartType = dct[0], setDashChartType = dct[1];
   var importRef = useRef(null);
+  var tipSt = useState(localStorage.getItem('healthTip') || ''); var tipText = tipSt[0]; var setTipText = tipSt[1];
+  var tipLdSt = useState(false); var tipLoading = tipLdSt[0]; var setTipLoading = tipLdSt[1];
   var replaceData = props.replaceData;
   var m = getM(td), curW = m ? m.weight : w;
   var prog = curW <= goal ? 100 : Math.max(0, (START_W - curW) / (START_W - goal) * 100);
   var rem = t.cal - cn.cal, exB = sumKey(td.exercises, 'calories');
   var wAllDates = Object.keys(data).filter(function(k) { return k !== '__settings' && getM(data[k]); }).sort();
-  var wRawPts = wAllDates.map(function(k) { return { date: k, value: getM(data[k]).weight }; });
-  var wChartData;
-  if (dashView === 'weekly') {
-    var wkM = {};
-    wRawPts.forEach(function(p) { var d = new Date(p.date); var thu = new Date(d); thu.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 3); var wk = thu.getFullYear() + '-W' + ('0' + Math.ceil((thu - new Date(thu.getFullYear(), 0, 1)) / 604800000 + 1)).slice(-2); if (!wkM[wk]) wkM[wk] = { sum: 0, n: 0 }; wkM[wk].sum += p.value; wkM[wk].n++; });
-    wChartData = Object.keys(wkM).sort().map(function(k) { return { lbl: k, value: Math.round(wkM[k].sum / wkM[k].n * 10) / 10 }; });
-  } else if (dashView === 'monthly') {
-    var moM = {};
-    wRawPts.forEach(function(p) { var k2 = p.date.substring(0, 7); if (!moM[k2]) moM[k2] = { sum: 0, n: 0 }; moM[k2].sum += p.value; moM[k2].n++; });
-    wChartData = Object.keys(moM).sort().map(function(k) { return { lbl: k, value: Math.round(moM[k].sum / moM[k].n * 10) / 10 }; });
-  } else {
-    wChartData = wRawPts.map(function(p) { return { lbl: fmtDate(p.date), value: p.value }; });
+  var DCT_TYPES = [
+    { k: 'weight', lbl: '체중',    color: C.cw, unit: 'kg', dm: [Math.max(goal-3,62), 93] },
+    { k: 'muscle', lbl: '골격근량', color: C.cm, unit: 'kg', dm: [32, 40] },
+    { k: 'fatPct', lbl: '체지방률', color: C.cf, unit: '%',  dm: [17, 33] }
+  ];
+  function dashChartDataFor(key) {
+    var rawPts = wAllDates.map(function(k) { var m2=getM(data[k]); return { date:k, value:m2[key] }; });
+    if (dashView === 'weekly') {
+      var wkM2 = {};
+      rawPts.forEach(function(p) { var d=new Date(p.date),thu=new Date(d); thu.setDate(d.getDate()-((d.getDay()+6)%7)+3); var wk=thu.getFullYear()+'-W'+('0'+Math.ceil((thu-new Date(thu.getFullYear(),0,1))/604800000+1)).slice(-2); if(!wkM2[wk])wkM2[wk]={sum:0,n:0}; wkM2[wk].sum+=p.value;wkM2[wk].n++; });
+      return Object.keys(wkM2).sort().map(function(k){return{lbl:k,value:Math.round(wkM2[k].sum/wkM2[k].n*10)/10};});
+    } else if (dashView === 'monthly') {
+      var moM2 = {};
+      rawPts.forEach(function(p){var k2=p.date.substring(0,7);if(!moM2[k2])moM2[k2]={sum:0,n:0};moM2[k2].sum+=p.value;moM2[k2].n++;});
+      return Object.keys(moM2).sort().map(function(k){return{lbl:k,value:Math.round(moM2[k].sum/moM2[k].n*10)/10};});
+    } else {
+      return rawPts.map(function(p){return{lbl:fmtDate(p.date),value:p.value};});
+    }
   }
+  var dctTab = DCT_TYPES.filter(function(t){return t.k===dashChartType;})[0]||DCT_TYPES[0];
+  var wChartData = dashChartDataFor(dashChartType);
+  var wRawPts = wAllDates.map(function(k) { return { date: k, value: getM(data[k]).weight }; });
   var wSelIdx = dashSelDate ? wAllDates.indexOf(dashSelDate) : -1;
   var wDVIEWS = [{ k: 'daily', lbl: '일별' }, { k: 'weekly', lbl: '주별' }, { k: 'monthly', lbl: '월별' }];
   var cardWeightChart = h('div', { style: CARD },
-    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' } },
-      h('p', { style: mx(CTITL, { margin: 0 }) }, '체중 변화 📈'),
+    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' } },
+      h('div', { style: { display: 'flex', gap: '4px' } },
+        DCT_TYPES.map(function(t) {
+          return h('button', { key: t.k, onClick: function() { setDashChartType(t.k); setDashSelDate(null); }, style: { padding: '4px 10px', borderRadius: '8px', fontSize: '11px', border: dashChartType === t.k ? '1.5px solid ' + t.color : '1px solid ' + C.bd, background: dashChartType === t.k ? t.color + '22' : 'transparent', color: dashChartType === t.k ? t.color : C.sub, cursor: 'pointer' } }, t.lbl);
+        })
+      ),
       h('div', { style: { display: 'flex', gap: '4px' } },
         wDVIEWS.map(function(v) {
           return h('button', { key: v.k, onClick: function() { setDashView(v.k); setDashSelDate(null); }, style: { padding: '4px 10px', borderRadius: '8px', fontSize: '11px', border: dashView === v.k ? '1.5px solid ' + C.acc : '1px solid ' + C.bd, background: dashView === v.k ? C.acc + '22' : 'transparent', color: dashView === v.k ? C.aL : C.sub, cursor: 'pointer' } }, v.lbl);
         })
       )
     ),
-    h(LineChart, { data: wChartData, color: C.cw, domain: [Math.max(goal - 3, 62), 93], goal: goal, unit: 'kg', onClickPoint: dashView === 'daily' ? function(i) { var d = wAllDates[i]; setDashSelDate(dashSelDate === d ? null : d); } : null, selectedIndex: dashView === 'daily' ? wSelIdx : -1, height: 160 }),
+    h(LineChart, { data: wChartData, color: dctTab.color, domain: dctTab.dm, goal: dashChartType === 'weight' ? goal : null, unit: dctTab.unit, onClickPoint: dashView === 'daily' ? function(i) { var d = wAllDates[i]; setDashSelDate(dashSelDate === d ? null : d); } : null, selectedIndex: dashView === 'daily' ? wSelIdx : -1, height: 160 }),
     dashSelDate && data[dashSelDate] ? h(DayDetailView, { date: dashSelDate, dayData: data[dashSelDate], onClose: function() { setDashSelDate(null); } }) : null
   );
 
@@ -406,31 +467,46 @@ function DashScreen(props) {
   );
 
   var cardGoalProg = h('div', { style: CARD },
-    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' } },
-      h('p', { style: CTITL }, '목표 달성률'),
-      h('span', { style: { fontSize: '12px', color: C.sub } }, '목표 ' + goal + 'kg')
-    ),
+    h('p', { style: CTITL }, '목표 달성률'),
     h('div', { style: { height: '10px', background: C.c2, borderRadius: '5px', overflow: 'hidden', marginBottom: '6px' } },
       h('div', { style: { height: '100%', width: Math.min(100, prog) + '%', background: C.acc, borderRadius: '5px', transition: 'width .5s' } })
     ),
-    h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: C.sub } },
+    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: C.sub } },
       h('span', null, '시작 ' + START_W + 'kg'),
       h('span', { style: { color: C.aL, fontWeight: '700' } }, prog.toFixed(1) + '% 달성'),
       h('span', null, '목표 ' + goal + 'kg')
     )
   );
 
+  /* labels left-col (auto), numbers right-col (1fr, right-aligned) → numbers flush with card right edge */
+  var calTextGrid = function(colGap) {
+    return h('div', { style: { flex: 1, display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: colGap, rowGap: '7px', fontSize: '13px', alignContent: 'center' } },
+      h('span', { style: { color: C.sub, paddingLeft: '21px'                   } }, '상한'),
+      h('span', { style: { fontWeight: '700', color: C.cc,    textAlign: 'right' } }, t.cal + ' kcal'),
+      h('span', { style: { color: C.sub, paddingLeft: '21px'                   } }, '섭취'),
+      h('span', { style: { fontWeight: '700', color: C.tx,    textAlign: 'right' } }, cn.cal + ' kcal'),
+      h('span', { style: { color: C.sub, paddingLeft: '21px'                   } }, '운동 소모'),
+      h('span', { style: { fontWeight: '700', color: C.cx,    textAlign: 'right' } }, '-' + exB + ' kcal'),
+      h('span', { style: { color: C.sub, paddingLeft: '21px'                   } }, '남은 칼로리'),
+      h('span', { style: { fontWeight: '700', color: rem >= 0 ? C.cm : C.ce, textAlign: 'right' } }, rem + ' kcal')
+    );
+  };
   var cardCalories = h('div', { style: CARD },
     h('p', { style: CTITL }, '오늘의 칼로리'),
-    h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px' } },
-      h(Ring, { val: cn.cal, max: t.cal, color: C.cc, sz: 84, sub: 'kcal' }),
-      h('div', { style: { flex: 1 } },
-        h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' } }, h('span', { style: { color: C.sub } }, '목표'),       h('span', { style: { fontWeight: '700', color: C.cc } }, t.cal + ' kcal')),
-        h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' } }, h('span', { style: { color: C.sub } }, '섭취'),       h('span', { style: { fontWeight: '700', color: C.tx } }, cn.cal + ' kcal')),
-        h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' } }, h('span', { style: { color: C.sub } }, '운동 소모'),  h('span', { style: { fontWeight: '700', color: C.cx } }, '-' + exB + ' kcal')),
-        h('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '13px'           } }, h('span', { style: { color: C.sub } }, '남은 칼로리'), h('span', { style: { fontWeight: '700', color: rem >= 0 ? C.cm : C.ce } }, rem + ' kcal'))
-      )
-    )
+    isWide
+      ? h('div', { style: { display: 'flex', alignItems: 'center', gap: '20px' } },
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 } },
+            h(Ring, { val: cn.cal,  max: t.cal,  color: C.cc, sz: 72, sub: 'kcal', lbl: '칼로리' }),
+            h(Ring, { val: cn.pro,  max: t.pro,  color: C.cm, sz: 56, sub: 'g',    lbl: '단백질' }),
+            h(Ring, { val: cn.carb, max: t.carb, color: C.cw, sz: 56, sub: 'g',    lbl: '탄수화물' }),
+            h(Ring, { val: cn.fat,  max: t.fat,  color: C.cf, sz: 56, sub: 'g',    lbl: '지방' })
+          ),
+          calTextGrid('68px')
+        )
+      : h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px' } },
+          h(Ring, { val: cn.cal, max: t.cal, color: C.cc, sz: 80, sub: 'kcal' }),
+          calTextGrid('16px')
+        )
   );
 
   var cardBasic = h('div', { style: CARD },
@@ -441,6 +517,53 @@ function DashScreen(props) {
       h('div', { style: mx(SBOX, { padding: '10px 12px', textAlign: 'left' }) }, h('p', { style: SLBL }, '남은 감량'),          h('p', { style: { margin: 0, fontSize: '15px', fontWeight: '700', color: C.cf } }, Math.max(0, curW - goal).toFixed(1) + ' kg')),
       h('div', { style: mx(SBOX, { padding: '10px 12px', textAlign: 'left' }) }, h('p', { style: SLBL }, '예상 소요 기간'),     h('p', { style: { margin: 0, fontSize: '15px', fontWeight: '700', color: C.cc } }, '약 ' + Math.ceil(Math.max(0, curW - goal) / (weeklyLoss || 0.5)) + '주'))
     )
+  );
+
+  var TIP_TOPICS = ['항산화 식품','단백질과 근육 합성','수분 섭취','수면과 체중 관리','스트레칭 효과','채소·과일의 영양','탄수화물 종류','좋은 지방 vs 나쁜 지방','식이섬유 효과','비타민·미네랄','장 건강','당 지수(GI)','간헐적 단식','걷기 운동 효과','근력 운동 이점'];
+  function fetchTip() {
+    var apiKey = (getApiKey() || '').replace(/[^\x21-\x7E]/g,'').trim();
+    if (!apiKey || tipLoading) return;
+    setTipLoading(true);
+    var topic = TIP_TOPICS[Math.floor(Math.random() * TIP_TOPICS.length)];
+    fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: '너는 건강 상식을 짧게 알려주는 전문가야.\n절대 규칙:\n- 한글(가나다라)과 숫자, 문장부호만 사용\n- 한자(漢字) 단 한 글자도 절대 금지\n- 로마자(abc) 금지\n- 모든 문장은 반드시 "~입니다" 또는 "~합니다" 형식으로 종결\n- 반드시 이모지를 사용할 것: 첫 번째 문장은 이모지로 시작, 두 번째 문장은 이모지로 끝냄\n- 핵심 한 문장 + 실용 팁 한 문장, 총 두 문장만\n- 제목 없음, 번호 없음' },
+          { role: 'user', content: '주제: ' + topic }
+        ],
+        max_tokens: 120,
+        temperature: 0.85
+      })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      var text = (((d.choices||[])[0]||{}).message||{}).content || '';
+      // 한자·CJK 문자 강제 제거
+      text = text.replace(/[一-鿿㐀-䶿豈-﫿]/g, '').replace(/\s{2,}/g, ' ').trim();
+      if (text) { setTipText(text); localStorage.setItem('healthTip', text); localStorage.setItem('healthTipDate', TODAY); }
+      setTipLoading(false);
+    }).catch(function() { setTipLoading(false); });
+  }
+  useEffect(function() {
+    var storedDate = localStorage.getItem('healthTipDate');
+    var storedVer = localStorage.getItem('healthTipVer');
+    // 프롬프트 개선 후 캐시 무효화 (ver 2)
+    if (storedVer !== '5') { localStorage.removeItem('healthTip'); localStorage.removeItem('healthTipDate'); localStorage.setItem('healthTipVer', '5'); }
+    var tip = localStorage.getItem('healthTip');
+    if (storedDate !== TODAY || !tip) fetchTip();
+    else setTipText(tip);
+  }, []);
+  var cardHealthTip = h('div', { style: { background: C.card, border: '1px solid ' + C.bd, borderRadius: '14px', padding: '10px 14px', marginBottom: '12px', minHeight: '112px', boxSizing: 'border-box' } },
+    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' } },
+      h('p', { style: mx(CTITL, { margin: 0 }) }, '건강 상식'),
+      h('button', { onClick: fetchTip, disabled: tipLoading, style: { background: 'none', border: 'none', color: C.sub, fontSize: '14px', cursor: 'pointer', padding: '0 2px', opacity: tipLoading ? 0.5 : 1 } }, '↺')
+    ),
+    tipLoading
+      ? h('p', { style: { margin: 0, fontSize: '12px', color: C.sub } }, '불러오는 중...')
+      : tipText
+        ? h('p', { style: { margin: 0, fontSize: '12px', color: C.tx, lineHeight: '1.7', wordBreak: 'keep-all' } }, tipText)
+        : null
   );
 
   function doExport() {
@@ -493,7 +616,7 @@ function DashScreen(props) {
       h(GoalSlider, { goal: goal, updateGoal: updG, curW: curW, weeklyLoss: weeklyLoss, updateWeeklyLoss: updWL }),
       h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' } },
         h('div', null, cardMeasurement, cardGoalProg, cardWeightChart),
-        h('div', null, cardCalories, cardBasic)
+        h('div', null, cardCalories, cardBasic, cardHealthTip)
       ),
       cardBackup
     );
@@ -510,6 +633,7 @@ function DashScreen(props) {
     cardCalories,
     cardBasic,
     cardWeightChart,
+    cardHealthTip,
     cardBackup
   );
 }
@@ -568,6 +692,11 @@ function BodyScreen(props) {
   var fs = useState({ weight: '', muscle: '', fatPct: '' }); var form = fs[0], setForm = fs[1];
   var hkfs = useState(false); var hkFill = hkfs[0], setHkFill = hkfs[1];
   var sds = useState(null); var selectedDate = sds[0], setSelectedDate = sds[1];
+  var editSt = useState(null); var editId = editSt[0]; var setEditId = editSt[1];
+  var edtDSt = useState(null); var editDate = edtDSt[0]; var setEditDate = edtDSt[1];
+  var hemSt = useState(false); var histEditMode = hemSt[0]; var setHistEditMode = hemSt[1];
+  var hsSt = useState(null); var histSelId = hsSt[0]; var setHistSelId = hsSt[1];
+  var hsdSt = useState(null); var histSelDate = hsdSt[0]; var setHistSelDate = hsdSt[1];
   var TABS = [
     { k: 'weight', lbl: '체중',    color: C.cw, unit: 'kg', dm: [Math.max(goal - 3, 62), 93] },
     { k: 'muscle', lbl: '골격근량', color: C.cm, unit: 'kg', dm: [32, 40] },
@@ -607,14 +736,78 @@ function BodyScreen(props) {
     var ww = parseFloat(form.weight);
     if (!ww) return;
     var prev = getM(td);
-    var entry = { id: Date.now(), weight: ww, muscle: parseFloat(form.muscle) || (prev ? prev.muscle : 0), fatPct: parseFloat(form.fatPct) || (prev ? prev.fatPct : 0), time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) };
-    if (hkFill) entry.fromHK = true;
-    updD(TODAY, { measurements: getAllM(td).concat([entry]) });
+    if (editId) {
+      var dk = editDate || TODAY;
+      updD(dk, { measurements: getAllM(data[dk] || {}).map(function(m) {
+        if (m.id !== editId) return m;
+        return mx(m, { weight: ww, muscle: parseFloat(form.muscle) || m.muscle, fatPct: parseFloat(form.fatPct) || m.fatPct });
+      }) });
+      setEditId(null); setEditDate(null);
+    } else {
+      var entry = { id: Date.now(), weight: ww, muscle: parseFloat(form.muscle) || (prev ? prev.muscle : 0), fatPct: parseFloat(form.fatPct) || (prev ? prev.fatPct : 0), time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) };
+      if (hkFill) entry.fromHK = true;
+      updD(TODAY, { measurements: getAllM(td).concat([entry]) });
+    }
     setForm({ weight: '', muscle: '', fatPct: '' });
     setHkFill(false);
   }
-  function deleteBodyEntry(id) {
-    updD(TODAY, { measurements: getAllM(td).filter(function(m) { return m.id !== id; }) });
+  function deleteBodyEntry(id, dk) {
+    dk = dk || TODAY;
+    updD(dk, { measurements: getAllM(data[dk] || {}).filter(function(m) { return m.id !== id; }) });
+  }
+  function startEdit(m2, dk) {
+    setForm({ weight: '' + m2.weight, muscle: '' + m2.muscle, fatPct: '' + m2.fatPct });
+    setEditId(m2.id); setEditDate(dk || TODAY);
+    setHistEditMode(false); setHistSelId(null); setHistSelDate(null);
+  }
+  function histHeader(hasAny) {
+    return h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' } },
+      h('p', { style: mx(CTITL, { margin: 0 }) }, '측정 기록'),
+      histEditMode
+        ? h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } },
+            h('button', { onClick: function() {
+                if (!histSelId || !histSelDate) return;
+                var en = getAllM(data[histSelDate] || {}).filter(function(m) { return m.id === histSelId; })[0];
+                if (en) startEdit(en, histSelDate);
+              },
+              style: { background: 'none', border: '1px solid ' + (histSelId ? C.acc : C.bd), borderRadius: '8px', color: histSelId ? C.aL : C.sub, padding: '3px 10px', fontSize: '12px', cursor: histSelId ? 'pointer' : 'default' } }, '편집'),
+            h('button', { onClick: function() {
+                if (!histSelId || !histSelDate) return;
+                deleteBodyEntry(histSelId, histSelDate);
+                setHistEditMode(false); setHistSelId(null); setHistSelDate(null);
+              },
+              style: { background: 'none', border: '1px solid ' + (histSelId ? '#ef4444' : C.bd), borderRadius: '8px', color: histSelId ? '#ef4444' : C.sub, padding: '3px 10px', fontSize: '12px', cursor: histSelId ? 'pointer' : 'default' } }, '삭제'),
+            h('button', { onClick: function() { setHistEditMode(false); setHistSelId(null); setHistSelDate(null); },
+              style: { background: 'none', border: 'none', color: C.sub, fontSize: '13px', cursor: 'pointer', padding: '0 4px' } }, '✕')
+          )
+        : (hasAny
+            ? h('button', { onClick: function() { setHistEditMode(true); setHistSelId(null); setHistSelDate(null); },
+                style: { background: 'none', border: 'none', color: C.sub, fontSize: '20px', lineHeight: 1, padding: '0 4px', cursor: 'pointer' } }, '⋮')
+            : null)
+    );
+  }
+  function histRows(allDates2) {
+    return allDates2.slice().reverse().map(function(k) {
+      var ms = getAllM(data[k]).slice().reverse();
+      var multi = ms.length > 1;
+      return h('div', { key: k },
+        h('div', { style: { fontSize: '11px', color: C.sub, padding: '8px 0 3px', borderBottom: '1px solid ' + C.bd } }, k),
+        ms.map(function(m2) {
+          var isSel = histSelId === m2.id;
+          return h('div', { key: '' + (m2.id || k),
+            onClick: histEditMode ? function() { setHistSelId(isSel ? null : m2.id); setHistSelDate(isSel ? null : k); } : undefined,
+            style: { display: 'flex', alignItems: 'center', padding: '7px 0 7px 8px', borderBottom: '1px solid ' + C.bd, cursor: histEditMode ? 'pointer' : 'default' } },
+            histEditMode ? h('div', { style: { width: '15px', height: '15px', borderRadius: '50%', border: '2px solid ' + (isSel ? C.acc : C.sub), background: isSel ? C.acc : 'transparent', marginRight: '8px', flexShrink: 0 } }) : null,
+            h('div', { style: { display: 'flex', gap: '10px', fontSize: '13px', alignItems: 'center', flexWrap: 'wrap' } },
+              h('span', { style: { color: C.cw, fontWeight: '700' } }, m2.weight + 'kg'),
+              h('span', { style: { color: C.cm, fontWeight: '700' } }, m2.muscle + 'kg'),
+              h('span', { style: { color: C.cf, fontWeight: '700' } }, m2.fatPct + '%'),
+              multi && m2.time ? h('span', { style: { color: C.sub, fontSize: '11px' } }, m2.time) : null
+            )
+          );
+        })
+      );
+    });
   }
 
   var cardForm = h('div', { style: CARD },
@@ -625,7 +818,7 @@ function BodyScreen(props) {
         return hkData && (hkData.weight || hkData.fatPct || hkData.muscle) ? h('button', {
           onClick: function() {
             if (hkBodyAdded) return;
-            setForm({ weight: hkData.weight ? '' + hkData.weight : form.weight, muscle: hkData.muscle ? '' + hkData.muscle : form.muscle, fatPct: hkData.fatPct ? '' + hkData.fatPct : form.fatPct });
+            setForm({ weight: hkData.weight ? '' + hkData.weight : form.weight, muscle: form.muscle, fatPct: hkData.fatPct ? '' + hkData.fatPct : form.fatPct });
             setHkFill(true);
           },
           disabled: hkBodyAdded,
@@ -638,7 +831,10 @@ function BodyScreen(props) {
       h('div', null, h('label', { style: { display: 'block', fontSize: '12px', color: C.sub, marginBottom: '3px' } }, '골격근량 (kg)'), h('input', { type: 'number', step: '0.01', placeholder: '' + (getM(td) ? getM(td).muscle : '35.8'),  value: form.muscle, onChange: function(e) { setForm(mx(form, { muscle: e.target.value })); }, style: INP })),
       h('div', null, h('label', { style: { display: 'block', fontSize: '12px', color: C.sub, marginBottom: '3px' } }, '체지방률 (%)'), h('input', { type: 'number', step: '0.01', placeholder: '' + (getM(td) ? getM(td).fatPct : '29.8'),  value: form.fatPct, onChange: function(e) { setForm(mx(form, { fatPct: e.target.value })); }, style: INP }))
     ),
-    h('button', { onClick: saveForm, style: BTP }, '저장하기')
+    h('div', { style: { display: 'flex', gap: '8px' } },
+      h('button', { onClick: saveForm, style: BTP }, editId ? '수정하기' : '저장하기'),
+      editId ? h('button', { onClick: function() { setEditId(null); setForm({ weight: '', muscle: '', fatPct: '' }); }, style: mx(BTS, { flex: '0 0 auto' }) }, '취소') : null
+    )
   );
   var VIEW_MODES = [{ k: 'daily', lbl: '일별' }, { k: 'weekly', lbl: '주별' }, { k: 'monthly', lbl: '월별' }];
   var cardTabChart = h('div', null,
@@ -653,7 +849,7 @@ function BodyScreen(props) {
       })
     ),
     h('div', { style: mx(CARD, { padding: '12px 8px 8px' }) },
-      h(LineChart, { data: chartData, color: tab.color, domain: tab.dm, goal: ct === 'weight' ? goal : null, unit: tab.unit, onClickPoint: viewMode === 'daily' ? onClickPoint : null, selectedIndex: viewMode === 'daily' ? selIdx : -1, height: isWide ? 220 : undefined }),
+      h(LineChart, { data: chartData, color: tab.color, domain: tab.dm, goal: ct === 'weight' ? goal : null, unit: tab.unit, onClickPoint: viewMode === 'daily' ? onClickPoint : null, selectedIndex: viewMode === 'daily' ? selIdx : -1, height: undefined }),
       h('p', { style: { margin: '6px 0 0', textAlign: 'center', fontSize: '11px', color: C.sub } }, viewMode === 'daily' ? (selIdx !== -1 ? '다시 클릭하면 닫힘니다' : '점을 클릭하면 상세 기록을 볼 수 있어요') : (viewMode === 'weekly' ? '주별 평균 체중' : '월별 평균 체중'))
     )
   );
@@ -661,33 +857,22 @@ function BodyScreen(props) {
     ? h(DayDetailView, { date: selectedDate, dayData: data[selectedDate], onClose: function() { setSelectedDate(null); } })
     : null;
   var cardHistory = h('div', { style: CARD },
-    h('p', { style: CTITL }, '측정 기록'),
-    allDates.slice().reverse().map(function(k) {
-      return h('div', { key: k },
-        h('div', { style: { fontSize: '11px', color: C.sub, padding: '8px 0 3px', borderBottom: '1px solid ' + C.bd } }, k),
-        getAllM(data[k]).slice().reverse().map(function(m2) {
-          return h('div', { key: '' + (m2.id || k), style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0 7px 8px', borderBottom: '1px solid ' + C.bd } },
-            h('div', { style: { display: 'flex', gap: '10px', fontSize: '13px', alignItems: 'center', flexWrap: 'wrap' } },
-              h('span', { style: { color: C.cw, fontWeight: '700' } }, m2.weight + 'kg'),
-              h('span', { style: { color: C.cm, fontWeight: '700' } }, m2.muscle + 'kg'),
-              h('span', { style: { color: C.cf, fontWeight: '700' } }, m2.fatPct + '%'),
-              m2.time ? h('span', { style: { color: C.sub, fontSize: '11px' } }, m2.time) : null,
-              m2.fromHK ? h('span', { style: { color: C.aL, fontSize: '10px' } }, '❤ HK') : null
-            ),
-            k === TODAY ? h('button', { onClick: function() { deleteBodyEntry(m2.id); }, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.sub, padding: '4px', fontSize: '14px' } }, '🗑') : null
-          );
-        })
-      );
-    })
+    histHeader(allDates.length > 0),
+    histRows(allDates)
   );
 
   if (isWide) {
     return h('div', { style: { padding: '48px 32px 32px', overflowY: 'auto', height: '100%' } },
       h('h1', { style: { margin: '0 0 18px', fontSize: '28px', fontWeight: '700' } }, '체중 기록 ⚖️'),
       cardForm,
-      h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' } },
-        cardTabChart,
-        cardDetail || cardHistory
+      h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' } },
+        h('div', null, cardTabChart, cardDetail),
+        h('div', { style: { display: 'flex', flexDirection: 'column', overflow: 'hidden' } },
+          h('div', { style: { background: C.card, border: '1px solid ' + C.bd, borderRadius: '14px', padding: '14px 16px', flex: 1, overflowY: 'auto' } },
+            histHeader(allDates.length > 0),
+            histRows(allDates)
+          )
+        )
       )
     );
   }
@@ -702,8 +887,21 @@ function BodyScreen(props) {
 }
 
 /* ─── NUTRITION SCREEN ───────────────────────── */
+function fmtDate(d) {
+  var y = new Date(); y.setHours(0,0,0,0);
+  var y1 = new Date(y); y1.setDate(y1.getDate()-1);
+  var fmt = function(dt) { return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0'); };
+  if (d === TODAY) return '오늘';
+  if (d === fmt(y1)) return '어제';
+  return d.slice(5).replace('-','/');
+}
+function shiftDate(d, n) {
+  var dt = new Date(d+'T00:00:00'); dt.setDate(dt.getDate()+n);
+  return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+}
+
 function NutrScreen(props) {
-  var td = props.td, t = props.tgt, cn = props.consumed, updD = props.updateData;
+  var t = props.tgt, updD = props.updateData;
   var hkData = props.hkData;
   var s1 = useState(false); var showForm = s1[0], setShowForm = s1[1];
   var isWide = props.isWide;
@@ -714,8 +912,119 @@ function NutrScreen(props) {
   var s6 = useState(''); var keyInput = s6[0], setKeyInput = s6[1];
   var s7 = useState(null); var editingId = s7[0], setEditingId = s7[1];
   var s8 = useState(''); var analyzeErr = s8[0], setAnalyzeErr = s8[1];
+  var s9 = useState(null); var aiResult = s9[0], setAiResult = s9[1];
+  var s10 = useState(false); var aiAnalyzing = s10[0], setAiAnalyzing = s10[1];
+  var sds = useState(TODAY); var selDate = sds[0], setSelDate = sds[1];
   var fileRef = useRef(null);
+  var td = (props.data && props.data[selDate]) || { measurement: null, foods: [], exercises: [] };
+  var cn = { cal: sumKey(td.foods,'calories'), pro: sumKey(td.foods,'protein'), fat: sumKey(td.foods,'fat'), carb: sumKey(td.foods,'carbs'), sug: sumKey(td.foods,'sugar'), sod: sumKey(td.foods,'sodium') };
+  var isToday = selDate === TODAY;
+  // 과거 날짜는 당시 weeklyLoss 기준으로 목표 재계산
+  var t = (function() {
+    if (isToday) return props.tgt;
+    var settings = (props.data && props.data.__settings) || {};
+    var history = (settings.wlHistory || []).filter(function(e) { return e.date <= selDate; }).sort(function(a,b){ return b.date < a.date ? -1 : 1; });
+    var wl = history.length ? history[0].value : (settings.weeklyLoss != null ? settings.weeklyLoss : 0.5);
+    return calcTgt(props.w, 0, wl, settings.height || HT, settings.age || AGE, settings.gender === 'female');
+  })();
   var rem = { cal: t.cal - cn.cal, pro: t.pro - cn.pro, carb: t.carb - cn.carb, fat: t.fat - cn.fat, sod: t.sod - cn.sod };
+
+  var RATING_MAP = {
+    'Great':  { emojis: ['🎯','🏆','✨','🥇','🎉'], color: '#22c55e', label: '완벽한 절제!' },
+    'Good':   { emojis: ['💪','😎','👏','🤙','🙌'], color: '#6366f1', label: '잘하고 있어요' },
+    'Normal': { emojis: ['😌','🙂','🤷','😑','👌'], color: C.sub,     label: '적당해요' },
+    'Bad':    { emojis: ['🫠','😅','🥲','😬','🫤'], color: '#f59e0b', label: '조금 많이 드셨어요' },
+    'Worst':  { emojis: ['💀','💥','😵','🤯','🫨'], color: '#ef4444', label: '오늘 너무 많이 드셨어요!' }
+  };
+
+  function analyzeDiet() {
+    var apiKey = (getApiKey() || '').replace(/[^\x21-\x7E]/g,'').trim();
+    if (!apiKey) { setShowKey(true); return; }
+    var foods = td.foods || [];
+    if (!foods.length) { setAiResult({ rating: 'Normal', comment: '아직 오늘 식단 기록이 없어요.' }); return; }
+    setAiAnalyzing(true); setAiResult(null);
+    var foodLines = foods.map(function(f) {
+      return '- ' + f.name + ' (' + f.meal + '): ' + Math.round(f.calories) + 'kcal, 단백질 ' + (f.protein||0) + 'g, 탄수 ' + (f.carbs||0) + 'g, 지방 ' + (f.fat||0) + 'g';
+    }).join('\n');
+    var mealProportions = { '아침': 0.30, '점심': 0.35, '저녁': 0.35 };
+    var loggedMeals = {};
+    foods.forEach(function(f) { loggedMeals[f.meal] = true; });
+    var loggedMealNames = Object.keys(mealProportions).filter(function(m) { return loggedMeals[m]; });
+    var proportion = loggedMealNames.reduce(function(s, m) { return s + mealProportions[m]; }, 0);
+    if (proportion === 0) proportion = 0.5;
+    var adjCal = Math.round(t.cal * proportion);
+    var adjPro = Math.round(t.pro * proportion);
+    var adjCarb = Math.round(t.carb * proportion);
+    var adjFat = Math.round(t.fat * proportion);
+    var mealCtx = loggedMealNames.length ? loggedMealNames.join('+') + ' 기준 (' + Math.round(proportion*100) + '%)' : '간식만';
+    var prompt = [
+      '식단 분석 결과를 아래 형식으로만 답하라. 다른 말 절대 금지.',
+      'RATING: [Great/Good/Normal/Bad/Worst 중 하나]',
+      'COMMENT: [현상 판단 + 개선 가이드를 한 문장으로. 예: "탄수 과다·단백질 부족, 저녁엔 닭가슴살 추천!" / "칼로리 딱 좋고 단백질도 충분해요!" 최대 35자]',
+      '',
+      '★ 이것은 다이어트 앱이다. 칼로리 상한량은 절대로 넘으면 안 되는 최대치이며, 이보다 적게 먹을수록 좋다.',
+      '★ RATING 기준 (칼로리 기준 우선, 영양소 균형 보조):',
+      '  Great = 상한량 대비 80% 이하 섭취 + 단백질 충분',
+      '  Good  = 상한량 대비 80~95% 섭취 or 살짝 넘었지만 영양 균형 좋음',
+      '  Normal = 상한량 대비 95~105% 섭취',
+      '  Bad   = 상한량 대비 105~120% 초과',
+      '  Worst = 상한량 대비 120% 이상 초과',
+      '',
+      '⚠️ 아직 하루가 끝나지 않음. 기록된 식사(' + mealCtx + ')에 비례한 상한량과 비교하라.',
+      '비례 상한량: 칼로리 ' + adjCal + 'kcal / 단백질 ' + adjPro + 'g / 탄수 ' + adjCarb + 'g / 지방 ' + adjFat + 'g',
+      '실제 섭취: 칼로리 ' + cn.cal + 'kcal / 단백질 ' + cn.pro + 'g / 탄수 ' + cn.carb + 'g / 지방 ' + cn.fat + 'g',
+      '식단:\n' + foodLines
+    ].join('\n');
+    fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 80, temperature: 0.5 })
+    }).then(function(r) { return r.json(); }).then(function(d) {
+      var txt = (((d.choices||[])[0]||{}).message||{}).content || '';
+      var rm = txt.match(/RATING:\s*(Great|Good|Normal|Bad|Worst)/i);
+      var cm = txt.match(/COMMENT:\s*(.+)/);
+      var rating = rm ? rm[1] : 'Normal';
+      var rEmojis = (RATING_MAP[rating] || RATING_MAP['Normal']).emojis;
+      var emoji = rEmojis[Math.floor(Math.random() * rEmojis.length)];
+      setAiResult({ rating: rating, comment: cm ? cm[1].trim() : txt.trim().slice(0,40), emoji: emoji });
+      setAiAnalyzing(false);
+    }).catch(function() {
+      setAiResult({ rating: 'Normal', comment: 'API 오류가 발생했어요.' });
+      setAiAnalyzing(false);
+    });
+  }
+
+  useEffect(function() { setAiResult(null); setAiAnalyzing(false); }, [selDate]);
+
+  useEffect(function() {
+    var foods = td.foods || [];
+    if (!foods.length) { setAiResult(null); return; }
+    var tid = setTimeout(function() { analyzeDiet(); }, 2000);
+    return function() { clearTimeout(tid); };
+  }, [cn.cal, (td.foods || []).length, t.cal]);
+
+  var rInfo = aiResult ? (RATING_MAP[aiResult.rating] || RATING_MAP['Normal']) : null;
+  var aiCard = h('div', { style: CARD },
+    aiAnalyzing ? h('div', { style: { textAlign: 'center', padding: '18px 0' } },
+      h('div', { style: { display: 'inline-flex', gap: '5px' } },
+        h('div', { style: { width: '8px', height: '8px', borderRadius: '50%', background: C.sub, animation: 'pulse 1s infinite' } }),
+        h('div', { style: { width: '8px', height: '8px', borderRadius: '50%', background: C.sub, animation: 'pulse 1s infinite .2s' } }),
+        h('div', { style: { width: '8px', height: '8px', borderRadius: '50%', background: C.sub, animation: 'pulse 1s infinite .4s' } })
+      )
+    ) : null,
+    rInfo && !aiAnalyzing ? h('div', { style: { textAlign: 'center', padding: '6px 0 4px' } },
+      h('div', { style: { fontSize: '56px', lineHeight: '1.1', marginBottom: '6px' } }, aiResult.emoji || rInfo.emojis[0]),
+      h('p', { style: { margin: '0 0 8px', fontSize: '18px', fontWeight: '700', color: rInfo.color } }, rInfo.label),
+      h('p', { style: { margin: 0, fontSize: '13px', color: C.tx } }, aiResult.comment)
+    ) : null,
+    !aiResult && !aiAnalyzing ? h('p', { style: { margin: 0, fontSize: '12px', color: C.sub, textAlign: 'center', padding: '8px 0' } }, '식단을 추가하면 자동으로 분석해드려요') : null
+  );
+
+  var dateNav = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+    h('button', { onClick: function() { setSelDate(shiftDate(selDate,-1)); setShowForm(false); }, style: { background: 'none', border: '1px solid '+C.bd, borderRadius: '8px', color: C.sub, padding: '4px 10px', cursor: 'pointer', fontSize: '16px' } }, '‹'),
+    h('span', { style: { fontSize: '14px', fontWeight: '600', color: C.tx, minWidth: '52px', textAlign: 'center' } }, fmtDate(selDate)),
+    h('button', { onClick: function() { if (!isToday) { setSelDate(shiftDate(selDate,1)); setShowForm(false); } }, style: { background: 'none', border: '1px solid '+C.bd, borderRadius: '8px', color: isToday ? C.bd : C.sub, padding: '4px 10px', cursor: isToday ? 'default' : 'pointer', fontSize: '16px' } }, '›')
+  );
 
   function analyzePhotoB64(b64, mediaType) {
     var apiKey = (getApiKey() || '').replace(/[^\x21-\x7E]/g,'').trim();
@@ -743,7 +1052,7 @@ function NutrScreen(props) {
         var cleaned = text.replace(/```json/g,'').replace(/```/g,'').trim().replace(/:\s*(\d+(?:\.\d+)?)\s*[a-zA-Z]+/g,':$1');
         var r2 = JSON.parse(cleaned);
         var food = { id: Date.now(), name: r2.name||'음식', meal: form.meal||'아침', grams: 0, calories: parseFloat(r2.cal)||0, protein: parseFloat(r2.pro)||0, carbs: parseFloat(r2.carb)||0, fat: parseFloat(r2.fat)||0, sugar: parseFloat(r2.sug)||0, sodium: 0, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) };
-        updD(TODAY, { foods: (td.foods||[]).concat([food]) });
+        updD(selDate, { foods: (td.foods||[]).concat([food]) });
         setAnalyzeErr(''); setAnalyzing(false); setShowForm(false);
       } catch(pe) { setAnalyzeErr('파싱 오류: ' + text.slice(0,100)); setAnalyzing(false); }
     }).catch(function(e) {
@@ -785,13 +1094,13 @@ function NutrScreen(props) {
   function addFood() {
     if (!form.name || !form.cal) return;
     if (editingId) {
-      updD(TODAY, { foods: (td.foods || []).map(function(f) {
+      updD(selDate, { foods: (td.foods || []).map(function(f) {
         return f.id === editingId ? mx(f, { name: form.name, meal: form.meal || f.meal, calories: parseFloat(form.cal) || 0, protein: parseFloat(form.pro) || 0, carbs: parseFloat(form.carb) || 0, fat: parseFloat(form.fat) || 0, sugar: parseFloat(form.sug) || 0, sodium: parseFloat(form.sod) || 0, grams: parseFloat(form.g) || 0 }) : f;
       }) });
       setEditingId(null);
     } else {
       var food = { id: Date.now(), name: form.name, meal: form.meal || '아침', grams: parseFloat(form.g) || 0, calories: parseFloat(form.cal) || 0, protein: parseFloat(form.pro) || 0, carbs: parseFloat(form.carb) || 0, fat: parseFloat(form.fat) || 0, sugar: parseFloat(form.sug) || 0, sodium: parseFloat(form.sod) || 0, time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) };
-      updD(TODAY, { foods: (td.foods || []).concat([food]) });
+      updD(selDate, { foods: (td.foods || []).concat([food]) });
     }
     setForm({ name: '', g: '', cal: '', pro: '', carb: '', fat: '', sug: '', sod: '', meal: form.meal || '아침' });
     setShowForm(false);
@@ -803,7 +1112,7 @@ function NutrScreen(props) {
     setForm({ name: food.name, g: '' + (food.grams || 0), cal: '' + food.calories, pro: '' + food.protein, carb: '' + food.carbs, fat: '' + food.fat, sug: '' + (food.sugar || 0), sod: '' + (food.sodium || 0), meal: food.meal || '아침' });
   }
 
-  function deleteFood(id) { updD(TODAY, { foods: (td.foods || []).filter(function(f) { return f.id !== id; }) }); }
+  function deleteFood(id) { updD(selDate, { foods: (td.foods || []).filter(function(f) { return f.id !== id; }) }); }
 
   var MEAL_DEFS = [
     { k: '아침', ic: '🌅', col: '#f59e0b' },
@@ -859,7 +1168,7 @@ function NutrScreen(props) {
 
 
   var hkAlreadyAdded = !!(td.hkFoodAdded);
-  var hkFoodCard = hkData && hkData.dietaryCalories > 0 ? h('div', { style: mx(CARD, { borderLeft: '3px solid ' + C.cc }) },
+  var hkFoodCard = isToday && hkData && hkData.dietaryCalories > 0 ? h('div', { style: mx(CARD, { borderLeft: '3px solid ' + C.cc }) },
     h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
       h('div', null,
         h('p', { style: mx(CTITL, { margin: '0 0 2px' }) }, '🍎 건강 앱'),
@@ -869,7 +1178,7 @@ function NutrScreen(props) {
         h('p', { style: { margin: '0 0 4px', fontSize: '22px', fontWeight: '700', color: C.cc } }, hkData.dietaryCalories + ' kcal'),
         h('button', {
           onClick: function() {
-            updD(TODAY, { foods: (td.foods || []).concat([{ id: Date.now(), name: '건강 앱 식이', meal: '기타', grams: 0, calories: hkData.dietaryCalories, protein: hkData.dietaryProtein || 0, carbs: hkData.dietaryCarb || 0, fat: hkData.dietaryFat || 0, sugar: hkData.dietarySugar || 0, sodium: hkData.dietarySodium || 0, time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) }]), hkFoodAdded: true });
+            updD(selDate, { foods: (td.foods || []).concat([{ id: Date.now(), name: '건강 앱 식이', meal: '기타', grams: 0, calories: hkData.dietaryCalories, protein: hkData.dietaryProtein || 0, carbs: hkData.dietaryCarb || 0, fat: hkData.dietaryFat || 0, sugar: hkData.dietarySugar || 0, sodium: hkData.dietarySodium || 0, time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }) }]), hkFoodAdded: true });
           },
           disabled: hkAlreadyAdded, style: { background: 'none', border: '1px solid ' + (hkAlreadyAdded ? C.sub : C.cc), borderRadius: '8px', color: hkAlreadyAdded ? C.sub : C.cc, fontSize: '11px', padding: '4px 9px', cursor: hkAlreadyAdded ? 'default' : 'pointer' }
         }, hkAlreadyAdded ? '✓ 이미 추가됨' : '+ 식단에 추가')
@@ -888,7 +1197,10 @@ function NutrScreen(props) {
   if (isWide) {
     return h('div', { style: { padding: '48px 32px 32px', overflowY: 'auto', height: '100%' } },
       h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' } },
-        h('h1', { style: { margin: 0, fontSize: '28px', fontWeight: '700' } }, '영양 관리 🍱'),
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px' } },
+          h('h1', { style: { margin: 0, fontSize: '28px', fontWeight: '700' } }, '영양 관리 🍱'),
+          dateNav
+        ),
         h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '× 닫기' : '+ 추가')
       ),
       showKey ? h('div', { style: CARD },
@@ -967,9 +1279,10 @@ function NutrScreen(props) {
           ) : null,
           hkFoodCard,
           h('div', { style: CARD },
-            h('p', { style: CTITL }, '오늘의 식단'),
+            h('p', { style: CTITL }, fmtDate(selDate) + '의 식단'),
             renderFoodList(td.foods || [])
-          )
+          ),
+          aiCard
         )
       )
     );
@@ -977,7 +1290,10 @@ function NutrScreen(props) {
 
   return h('div', { className: 'screen' },
     h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' } },
-      h('h1', { style: { margin: 0, fontSize: '22px', fontWeight: '700' } }, '\uC601\uC591 \uAD00\uB9AC \uD83C\uDF71'),
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+        h('h1', { style: { margin: 0, fontSize: '22px', fontWeight: '700' } }, '\uC601\uC591 \uAD00\uB9AC \uD83C\uDF71'),
+        dateNav
+      ),
       h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '\u00D7 \uB2EB\uAE30' : '+ \uCD94\uAC00')
     ),
     showKey ? h('div', { style: CARD },
@@ -1051,22 +1367,32 @@ function NutrScreen(props) {
     h('div', { style: CARD },
       h('p', { style: CTITL }, '\uC624\uB298\uC758 \uC2DD\uB2E8'),
       renderFoodList(td.foods || [])
-    )
+    ),
+    aiCard
   );
 }
 
 /* ─── EXERCISE SCREEN ────────────────────────── */
 function ExerScreen(props) {
   var isWide = props.isWide;
-  var td = props.td, t = props.tgt, cn = props.consumed, updD = props.updateData, w = props.w;
+  var t = props.tgt, updD = props.updateData, w = props.w;
   var hkData = props.hkData;
   var s1 = useState(false); var showForm = s1[0], setShowForm = s1[1];
   var s2 = useState(false); var showWatch = s2[0], setShowWatch = s2[1];
   var s3 = useState({ typeIdx: 0, mins: '30', notes: '' }); var form = s3[0], setForm = s3[1];
   var s4 = useState(null); var editingExId = s4[0], setEditingExId = s4[1];
   var s5 = useState(''); var editCalVal = s5[0], setEditCalVal = s5[1];
+  var sds = useState(TODAY); var selDate = sds[0], setSelDate = sds[1];
+  var td = (props.data && props.data[selDate]) || { foods: [], exercises: [] };
+  var cn = { cal: sumKey(td.foods, 'calories') };
+  var isToday = selDate === TODAY;
+  var dateNav = h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+    h('button', { onClick: function() { setSelDate(shiftDate(selDate,-1)); setShowForm(false); }, style: { background: 'none', border: '1px solid '+C.bd, borderRadius: '8px', color: C.sub, padding: '4px 10px', cursor: 'pointer', fontSize: '16px' } }, '‹'),
+    h('span', { style: { fontSize: '14px', fontWeight: '600', color: C.tx, minWidth: '52px', textAlign: 'center' } }, fmtDate(selDate)),
+    h('button', { onClick: function() { if (!isToday) { setSelDate(shiftDate(selDate,1)); setShowForm(false); } }, style: { background: 'none', border: '1px solid '+C.bd, borderRadius: '8px', color: isToday ? C.bd : C.sub, padding: '4px 10px', cursor: isToday ? 'default' : 'pointer', fontSize: '16px' } }, '›')
+  );
   var totalBurned = sumKey(td.exercises, 'calories'), net = cn.cal - totalBurned;
-  var appleWatchCard = hkData && hkData.activeCalories > 0 ? h('div', { style: mx(CARD, { borderLeft: '3px solid ' + C.cx }) },
+  var appleWatchCard = isToday && hkData && hkData.activeCalories > 0 ? h('div', { style: mx(CARD, { borderLeft: '3px solid ' + C.cx }) },
     h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
       h('div', null,
         h('p', { style: mx(CTITL, { margin: '0 0 2px' }) }, '❤️‍🔥 Apple Watch 오늘 소모'),
@@ -1080,17 +1406,17 @@ function ExerScreen(props) {
   function addExercise() {
     var ex = EXTYPE[form.typeIdx], mins = parseFloat(form.mins) || 0;
     var item = { id: Date.now(), type: ex.l, icon: ex.icon, minutes: mins, calories: burnCal(ex.met, mins, w), time: new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }), notes: form.notes };
-    updD(TODAY, { exercises: (td.exercises || []).concat([item]) });
+    updD(selDate, { exercises: (td.exercises || []).concat([item]) });
     setForm({ typeIdx: 0, mins: '30', notes: '' });
     setShowForm(false);
   }
 
-  function deleteExercise(id) { updD(TODAY, { exercises: (td.exercises || []).filter(function(x) { return x.id !== id; }) }); }
+  function deleteExercise(id) { updD(selDate, { exercises: (td.exercises || []).filter(function(x) { return x.id !== id; }) }); }
 
   function saveEditCal(id, val) {
     var cals = parseFloat(val);
     if (isNaN(cals) || cals < 0) return;
-    updD(TODAY, { exercises: (td.exercises || []).map(function(x) { return x.id === id ? mx(x, { calories: Math.round(cals) }) : x; }) });
+    updD(selDate, { exercises: (td.exercises || []).map(function(x) { return x.id === id ? mx(x, { calories: Math.round(cals) }) : x; }) });
     setEditingExId(null); setEditCalVal('');
   }
 
@@ -1100,18 +1426,21 @@ function ExerScreen(props) {
   if (isWide) {
     return h('div', { style: { padding: '48px 32px 32px', overflowY: 'auto', height: '100%' } },
       h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' } },
-        h('h1', { style: { margin: 0, fontSize: '28px', fontWeight: '700' } }, '운동 기록 🏃'),
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px' } },
+          h('h1', { style: { margin: 0, fontSize: '28px', fontWeight: '700' } }, '운동 기록 🏃'),
+          dateNav
+        ),
         h('div', { style: { display: 'flex', gap: '8px' } },
           h('button', { onClick: function() { setShowWatch(!showWatch); }, style: BTS }, '⌚'),
           h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '× 닫기' : '+ 추가')
         )
       ),
-      h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' } },
+      h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' } },
         h('div', null,
           h('div', { style: CARD },
-            h('p', { style: CTITL }, '오늘의 칼로리 균형'),
+            h('p', { style: CTITL }, fmtDate(selDate) + '의 칼로리 균형'),
             h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' } },
-              h('div', { style: SBOX }, h('p', { style: SLBL }, '목표 칼로리'), h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: C.cc } }, '' + t.cal),        h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal')),
+              h('div', { style: SBOX }, h('p', { style: SLBL }, '칼로리 상한'), h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: C.cc } }, '' + t.cal),        h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal')),
               h('div', { style: SBOX }, h('p', { style: SLBL }, '운동 소모'),   h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: C.cx } }, '' + totalBurned), h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal')),
               h('div', { style: SBOX }, h('p', { style: SLBL }, '순 섭취'),     h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: net <= t.cal ? C.cm : C.ce } }, '' + net), h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal'))
             )
@@ -1154,10 +1483,10 @@ function ExerScreen(props) {
             h('button', { onClick: addExercise, style: BTP }, '추가하기')
           ) : null
         ),
-        h('div', null,
-          h('div', { style: CARD },
-            h('p', { style: CTITL }, '오늘의 운동'),
-            !(td.exercises && td.exercises.length) ? h('p', { style: { margin: 0, textAlign: 'center', fontSize: '13px', color: C.sub, padding: '16px 0' } }, '오늘 운동 기록이 없어요') :
+        h('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } },
+          h('div', { style: mx(CARD, { flex: 1, marginBottom: 0 }) },
+            h('p', { style: CTITL }, fmtDate(selDate) + '의 운동'),
+            !(td.exercises && td.exercises.length) ? h('p', { style: { margin: 0, textAlign: 'center', fontSize: '13px', color: C.sub, padding: '16px 0' } }, '운동 기록이 없어요') :
             (td.exercises || []).map(function(ex) {
               return h('div', { key: '' + ex.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid ' + C.bd } },
                 h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
@@ -1193,12 +1522,15 @@ function ExerScreen(props) {
   }
 
   return h('div', { className: 'screen' },
-    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' } },
-      h('h1', { style: { margin: 0, fontSize: '22px', fontWeight: '700' } }, '\uC6B4\uB3D9 \uAE30\uB85D \uD83C\uDFC3'),
-      h('div', { style: { display: 'flex', gap: '8px' } },
-        h('button', { onClick: function() { setShowWatch(!showWatch); }, style: BTS }, '\u231A'),
-        h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '\u00D7 \uB2EB\uAE30' : '+ \uCD94\uAC00')
-      )
+    h('div', { style: { marginBottom: '14px' } },
+      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
+        h('h1', { style: { margin: 0, fontSize: '22px', fontWeight: '700' } }, '\uC6B4\uB3D9 \uAE30\uB85D \uD83C\uDFC3'),
+        h('div', { style: { display: 'flex', gap: '8px' } },
+          h('button', { onClick: function() { setShowWatch(!showWatch); }, style: BTS }, '\u231A'),
+          h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '\u00D7 \uB2EB\uAE30' : '+ \uCD94\uAC00')
+        )
+      ),
+      dateNav
     ),
     showWatch ? h('div', { style: mx(CARD, { borderLeft: '3px solid #f59e0b', borderRadius: '0 14px 14px 0' }) },
       h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px' } },
@@ -1238,7 +1570,7 @@ function ExerScreen(props) {
       h('button', { onClick: addExercise, style: BTP }, '\uCD94\uAC00\uD558\uAE30')
     ) : null,
     h('div', { style: CARD },
-      h('p', { style: CTITL }, '\uC624\uB298\uC758 \uCE7C\uB85C\uB9AC \uADE0\uD615'),
+      h('p', { style: CTITL }, fmtDate(selDate) + '\uC758 \uCE7C\uB85C\uB9AC \uADE0\uD615'),
       h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' } },
         h('div', { style: SBOX }, h('p', { style: SLBL }, '\uBAA9\uD45C \uCE7C\uB85C\uB9AC'), h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: C.cc } }, '' + t.cal),        h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal')),
         h('div', { style: SBOX }, h('p', { style: SLBL }, '\uC6B4\uB3D9 \uC18C\uBAA8'),   h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: C.cx } }, '' + totalBurned), h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal')),
@@ -1246,8 +1578,8 @@ function ExerScreen(props) {
       )
     ),
     h('div', { style: CARD },
-      h('p', { style: CTITL }, '\uC624\uB298\uC758 \uC6B4\uB3D9'),
-      !(td.exercises && td.exercises.length) ? h('p', { style: { margin: 0, textAlign: 'center', fontSize: '13px', color: C.sub, padding: '16px 0' } }, '\uC624\uB298 \uC6B4\uB3D9 \uAE30\uB85D\uC774 \uC5C6\uC5B4\uC694') :
+      h('p', { style: CTITL }, fmtDate(selDate) + '\uC758 \uC6B4\uB3D9'),
+      !(td.exercises && td.exercises.length) ? h('p', { style: { margin: 0, textAlign: 'center', fontSize: '13px', color: C.sub, padding: '16px 0' } }, '\uC6B4\uB3D9 \uAE30\uB85D\uC774 \uC5C6\uC5B4\uC694') :
       (td.exercises || []).map(function(ex) {
         return h('div', { key: '' + ex.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid ' + C.bd } },
           h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
@@ -1387,6 +1719,7 @@ function ChatScreen(props) {
   var ks = useState(false); var showKey = ks[0], setShowKey = ks[1];
   var kis = useState(''); var keyInput = kis[0], setKeyInput = kis[1];
   var bottomRef = useRef(null);
+  var taRef = useRef(null);
 
   useEffect(function() {
     if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -1400,6 +1733,7 @@ function ChatScreen(props) {
     var newMsgs = msgs.concat([{ role: 'user', text: text }]);
     setMsgs(newMsgs);
     setInput('');
+    if (taRef.current) { taRef.current.style.height = '38px'; }
     setLoading(true);
     var rem = tgt ? Math.round(tgt.cal - consumed.cal) : 0;
     var tgtCal  = tgt ? Math.round(tgt.cal)  : goal;
@@ -1437,7 +1771,24 @@ function ChatScreen(props) {
       '✅ 먹어도 됩니다 또는 ⚠️ 주의 필요 또는 ❌ 초과됩니다',
       '한 줄 코멘트',
       '',
-      '음식 정보가 없는 질문엔 간단히 한국어로만 답하세요.'
+      '음식 정보가 없는 질문엔 간단히 한국어로만 답하세요.',
+      '',
+      '【과거 기록 복사 — COPY_FOOD 규칙】',
+      '사용자가 "어제 먹은 XX 추가해줘", "그저께 XX 그대로 넣어줘" 등 과거에 기록된 음식을 오늘에 복사 요청할 때:',
+      '→ [ADD_FOOD] 블록을 절대 사용하지 말고, 반드시 아래 마커를 사용하라. 클라이언트가 실제 기록에서 정확한 값을 가져온다:',
+      '[COPY_FOOD]{"name":"음식명","date":"YYYY-MM-DD"}[/COPY_FOOD]',
+      '날짜는 반드시 YYYY-MM-DD 형식. 오늘=' + TODAY + ', 어제=' + shiftDate(TODAY,-1) + ', 그저께=' + shiftDate(TODAY,-2),
+      '여러 음식이면 마커를 반복. 과거 날짜를 언급 안 하면 가장 최근 기록에서 찾는다(date를 "recent"로 설정).',
+      '',
+      '【영양 탭 자동 입력 — 엄격 규칙】',
+      '⚠️ 사용자가 "입력해줘", "추가해줘", "기록해줘", "넣어줘" 같은 명시적 입력 요청을 한 경우에만 JSON 블록을 포함하라.',
+      '"먹었어", "먹었는데", 칼로리 질문, 영양 정보 질문 등 단순 언급이나 질문에는 절대 블록을 포함하지 마라.',
+      '입력 요청이 확인된 경우, 음식마다 아래 JSON 블록을 각각 한 줄씩 답변 끝에 붙여라:',
+      '[ADD_FOOD]{"name":"음식명","meal":"아침","calories":숫자,"protein":숫자,"carbs":숫자,"fat":숫자,"sugar":숫자,"sodium":숫자}[/ADD_FOOD]',
+      '여러 음식이면 블록을 음식 수만큼 반복하라. 예시(닭가슴살+삶은달걀):',
+      '[ADD_FOOD]{"name":"닭가슴살 50g","meal":"점심","calories":55,"protein":11,"carbs":0,"fat":1,"sugar":0,"sodium":50}[/ADD_FOOD]',
+      '[ADD_FOOD]{"name":"삶은 달걀","meal":"점심","calories":78,"protein":6,"carbs":1,"fat":5,"sugar":0,"sodium":62}[/ADD_FOOD]',
+      '규칙: calories=kcal / protein·carbs·fat·sugar=g / sodium=mg. meal은 반드시 아침·점심·저녁·간식 중 하나 (언급 없으면 현재 시간 기준 추정).'
     ].join('\n');
     var history = newMsgs.slice(-10).map(function(m) {
       return { role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] };
@@ -1465,7 +1816,61 @@ function ChatScreen(props) {
       }).then(function(d) {
         if (!d) return;
         var reply = (((d.choices||[])[0]||{}).message||{}).content || '응답을 받지 못했습니다.';
-        setMsgs(function(prev) { return prev.concat([{ role: 'model', text: reply }]); });
+        var addedFoods = [];
+        var baseFoods = (props.td && props.td.foods) ? props.td.foods.slice() : [];
+        var displayText = reply
+          .replace(/\s*\[ADD_FOOD\][\s\S]*?\[\/ADD_FOOD\]/g, '')
+          .replace(/\s*\[COPY_FOOD\][\s\S]*?\[\/COPY_FOOD\]/g, '')
+          .trim();
+
+        // [COPY_FOOD] — 영양탭 실제 기록에서 직접 긁어오기
+        var copyMatches = reply.match(/\[COPY_FOOD\]([\s\S]*?)\[\/COPY_FOOD\]/g) || [];
+        copyMatches.forEach(function(block) {
+          try {
+            var inner = block.replace(/^\[COPY_FOOD\]/, '').replace(/\[\/COPY_FOOD\]$/, '').trim();
+            var cf = JSON.parse(inner);
+            var targetDate = cf.date;
+            var found = null;
+            function searchDate(dt) {
+              var ptd = data && data[dt];
+              if (!ptd || !ptd.foods) return;
+              ptd.foods.forEach(function(f) {
+                if (!found && (f.name.includes(cf.name) || cf.name.includes(f.name))) found = f;
+              });
+            }
+            if (targetDate && targetDate !== 'recent') {
+              searchDate(targetDate);
+            }
+            if (!found) {
+              for (var di2 = 1; di2 <= 30 && !found; di2++) searchDate(shiftDate(TODAY, -di2));
+            }
+            if (found) {
+              var copied = mx(found, { id: Date.now() + addedFoods.length, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) });
+              baseFoods.push(copied); addedFoods.push(copied);
+            } else {
+              displayText += '\n\n⚠️ 과거 기록에서 "' + cf.name + '"을(를) 찾을 수 없어요. 영양탭에서 직접 추가해주세요.';
+            }
+          } catch(e) {}
+        });
+
+        // [ADD_FOOD] — AI가 직접 영양값 생성
+        var addMatches = reply.match(/\[ADD_FOOD\]([\s\S]*?)\[\/ADD_FOOD\]/g) || [];
+        addMatches.forEach(function(block) {
+          try {
+            var inner = block.replace(/^\[ADD_FOOD\]/, '').replace(/\[\/ADD_FOOD\]$/, '').trim();
+            var cleaned = inner.replace(/:\s*(\d+(?:\.\d+)?)\s*[a-zA-Z]+/g, ':$1');
+            var fd = JSON.parse(cleaned);
+            var newFood = { id: Date.now() + addedFoods.length, name: fd.name||'음식', meal: fd.meal||'기타', grams: 0, calories: parseFloat(fd.calories)||0, protein: parseFloat(fd.protein)||0, carbs: parseFloat(fd.carbs)||0, fat: parseFloat(fd.fat)||0, sugar: parseFloat(fd.sugar)||0, sodium: parseFloat(fd.sodium)||0, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) };
+            baseFoods.push(newFood); addedFoods.push(newFood);
+          } catch(e) {}
+        });
+
+        if (addedFoods.length > 0) {
+          props.updateData(TODAY, { foods: baseFoods });
+          var lines = addedFoods.map(function(f) { return '  • ' + f.name + ' ' + Math.round(f.calories) + 'kcal (단백질 ' + f.protein + 'g · 탄수 ' + f.carbs + 'g · 지방 ' + f.fat + 'g)'; });
+          displayText += '\n\n✅ 영양 탭에 추가됐어요:\n' + lines.join('\n');
+        }
+        setMsgs(function(prev) { return prev.concat([{ role: 'model', text: displayText }]); });
         setLoading(false);
       }).catch(function(e) {
         var msg = e.message || '';
@@ -1527,9 +1932,11 @@ function ChatScreen(props) {
       h('div', { ref: bottomRef })
     ),
     h('div', { style: { padding: '10px 14px', paddingBottom: 'calc(env(safe-area-inset-bottom) + 10px)', borderTop: '1px solid ' + C.bd, display: 'flex', gap: '8px', flexShrink: 0, background: C.bg } },
-      h('input', { type: 'text', placeholder: '음식 이름이나 질문을 입력하세요...', value: input, onChange: function(e) { setInput(e.target.value); },
+      h('textarea', { ref: taRef, placeholder: '음식 이름이나 질문을 입력하세요... (Shift+Enter: 줄바꿈)', value: input, rows: 1,
+        onChange: function(e) { setInput(e.target.value); },
         onKeyDown: function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); } },
-        style: mx(INP, { flex: 1, margin: 0 }) }),
+        onInput: function(e) { var el = e.target; el.style.height = '38px'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; },
+        style: mx(INP, { flex: 1, margin: 0, resize: 'none', overflowY: 'hidden', lineHeight: '1.5', minHeight: '38px' }) }),
       h('button', { onClick: sendMsg, disabled: loading || !input.trim(), style: mx(BTP, { width: 'auto', padding: '0 16px', margin: 0, opacity: (loading || !input.trim()) ? '0.5' : '1' }) }, '전송')
     )
   );
@@ -1547,9 +1954,9 @@ function SideNav(props) {
   ];
   return h('div', { style: { width: '220px', background: C.card, borderRight: '1px solid ' + C.bd, display: 'flex', flexDirection: 'column', flexShrink: 0, height: '100%' } },
     h('div', { style: { padding: '28px 22px 22px', borderBottom: '1px solid ' + C.bd } },
-      h('div', { style: { fontSize: '30px', marginBottom: '8px' } }, '🏋️'),
-      h('p', { style: { margin: 0, fontSize: '18px', fontWeight: '700', color: C.tx } }, '다이어트'),
-      h('p', { style: { margin: '2px 0 0', fontSize: '12px', color: C.sub } }, '트래커')
+      h('div', { style: { fontSize: '30px', marginBottom: '8px' } }, DAILY_EMOJI),
+      h('p', { style: { margin: 0, fontSize: '16px', fontWeight: '700', color: C.tx } }, 'Health'),
+      h('p', { style: { margin: '1px 0 0', fontSize: '16px', fontWeight: '700', color: C.tx } }, 'Assistant')
     ),
     h('div', { style: { padding: '14px 10px', flex: 1 } },
       items.map(function(item) {
@@ -1621,6 +2028,46 @@ function App() {
     return function() { window.removeEventListener('resize', onResize); };
   }, []);
 
+  // 앱 로드 시: 전날 최종 weeklyLoss를 wlHistory에 커밋
+  useEffect(function() {
+    if (!data || !data.__settings) return;
+    // 전날 최종값 커밋
+    try {
+      var stored = JSON.parse(localStorage.getItem('wlDayFinal') || 'null');
+      if (stored && stored.date && stored.date !== TODAY) {
+        setData(function(prev) {
+          if (!prev || !prev.__settings) return prev;
+          var next = Object.assign({}, prev);
+          var hist = ((prev.__settings || {}).wlHistory || []).filter(function(e) { return e.date !== stored.date; });
+          hist.push({ date: stored.date, value: stored.value });
+          next.__settings = Object.assign({}, prev.__settings, { wlHistory: hist });
+          saveData(next);
+          return next;
+        });
+        localStorage.removeItem('wlDayFinal');
+      }
+    } catch(e) {}
+    // 오늘치 초기값 기록 (변경 없이 하루 지나도 남도록)
+    var wl = data.__settings.weeklyLoss != null ? data.__settings.weeklyLoss : 0.5;
+    try {
+      var cur = JSON.parse(localStorage.getItem('wlDayFinal') || 'null');
+      if (!cur || cur.date !== TODAY) localStorage.setItem('wlDayFinal', JSON.stringify({ date: TODAY, value: wl }));
+    } catch(e) {}
+    // 일회성: 2026-05-18 = 0.5
+    if (!localStorage.getItem('wlPatch0518')) {
+      setData(function(prev) {
+        if (!prev || !prev.__settings) return prev;
+        var next = Object.assign({}, prev);
+        var hist = ((prev.__settings || {}).wlHistory || []).filter(function(e) { return e.date !== '2026-05-18'; });
+        hist.push({ date: '2026-05-18', value: 0.5 });
+        next.__settings = Object.assign({}, prev.__settings, { wlHistory: hist });
+        saveData(next);
+        return next;
+      });
+      localStorage.setItem('wlPatch0518', '1');
+    }
+  }, [!!data && !!data.__settings]);
+
   useEffect(function() {
     try { localStorage.setItem('diet-chat', JSON.stringify(chatMsgs)); } catch(e) {}
     fbSaveChat(chatMsgs);
@@ -1680,6 +2127,8 @@ function App() {
   }
 
   function updateWeeklyLoss(wl) {
+    // 오늘의 최종값을 localStorage에 계속 덮어씀 → 다음 날 앱 열 때 어제치로 커밋
+    try { localStorage.setItem('wlDayFinal', JSON.stringify({ date: TODAY, value: wl })); } catch(e) {}
     setData(function(prev) {
       var next = Object.assign({}, prev);
       next.__settings = Object.assign({}, prev.__settings || {}, { weeklyLoss: wl });
