@@ -978,47 +978,33 @@ function NutrScreen(props) {
     }).join('\n');
     var loggedMeals = {};
     foods.forEach(function(f) { loggedMeals[f.meal] = true; });
-    var mealProps = { '아침': 0.30, '점심': 0.35, '저녁': 0.35 };
-    var loggedMainMeals = Object.keys(mealProps).filter(function(m) { return loggedMeals[m]; });
     var allMainMeals = ['아침', '점심', '저녁'];
+    var doneMeals = allMainMeals.filter(function(m) { return loggedMeals[m]; });
     var remainingMeals = allMainMeals.filter(function(m) { return !loggedMeals[m]; });
-
-    // 과거 날짜는 하루 식사 완료 → 전체 목표와 비교
-    // 오늘은 아직 식사 중 → 기록된 식사 비중으로만 비교
     var isPast = selDate < TODAY;
-    var proportion, mealCtx, remainCtx;
-    if (isPast) {
-      proportion = 1.0;
-      mealCtx = '하루 식사 완료 (전체 목표 기준)';
-      remainCtx = '없음';
-    } else {
-      proportion = loggedMainMeals.reduce(function(s, m) { return s + mealProps[m]; }, 0);
-      if (loggedMeals['간식']) proportion = Math.min(1.0, proportion + 0.15);
-      if (proportion === 0) proportion = 0.50;
-      var doneCtx = (loggedMainMeals.length ? loggedMainMeals.join('+') : '') + (loggedMeals['간식'] ? (loggedMainMeals.length ? '+간식' : '간식') : '');
-      mealCtx = doneCtx + ' 완료 (' + Math.round(proportion * 100) + '% 기준)';
-      remainCtx = remainingMeals.length ? remainingMeals.join('+') + ' 남음' : '하루 식사 완료';
-    }
-    var adjCal  = Math.round(t.cal  * proportion);
-    var adjPro  = Math.round(t.pro  * proportion);
-    var adjCarb = Math.round(t.carb * proportion);
-    var adjFat  = Math.round(t.fat  * proportion);
+    var dayDone = isPast || remainingMeals.length === 0;
+    var doneStr = doneMeals.concat(loggedMeals['간식'] ? ['간식'] : []).join('+') || '간식';
+    var dayCtx = dayDone
+      ? '하루 식사 완료'
+      : ('완료: ' + doneStr + ' / 남은 식사: ' + remainingMeals.join('+'));
     var prompt = [
       '식단 분석 결과를 아래 형식으로만 답하라. 다른 말 절대 금지.',
       'RATING: [Great/Good/Normal/Bad/Worst 중 하나]',
-      'COMMENT: [현상 판단 + 개선 가이드를 한 문장으로. 예: "탄수 과다·단백질 부족, 저녁엔 닭가슴살 추천!" / "칼로리 딱 좋고 단백질도 충분해요!" 최대 35자]',
+      'COMMENT: [현상 판단 + 개선 가이드를 한 문장으로. 최대 35자]',
       '',
-      '★ 이것은 다이어트 앱이다. 칼로리 상한량은 절대로 넘으면 안 되는 최대치이며, 이보다 적게 먹을수록 좋다.',
-      '★ RATING 기준 (칼로리 기준 우선, 영양소 균형 보조):',
-      '  Great = 상한량 대비 80% 이하 섭취 + 단백질 충분',
-      '  Good  = 상한량 대비 80~95% 섭취 or 살짝 넘었지만 영양 균형 좋음',
-      '  Normal = 상한량 대비 95~105% 섭취',
-      '  Bad   = 상한량 대비 105~120% 초과',
-      '  Worst = 상한량 대비 120% 이상 초과',
+      '★ 다이어트 앱. 하루 목표 칼로리는 초과하면 안 되는 상한선.',
+      '★ RATING 기준 — 하루 목표 대비 실제(또는 예상) 총 섭취량:',
+      '  Great = 목표 대비 80% 이하 + 단백질 충분',
+      '  Good  = 목표 대비 80~95%, 또는 균형 잡힌 섭취',
+      '  Normal = 목표 대비 95~105%',
+      '  Bad   = 목표 대비 105~120% 초과',
+      '  Worst = 목표 대비 120% 이상 초과',
+      '★ 진행 중인 날: 남은 식사를 감안해 하루 전체 페이스로 판단.',
+      '  특정 끼니나 간식이 좀 많아도 하루 합계가 목표 안이면 문제없음.',
       '',
-      '현황: ' + mealCtx + (isPast ? '' : ' / ' + remainCtx),
-      '목표: 칼로리 ' + adjCal + 'kcal / 단백질 ' + adjPro + 'g / 탄수 ' + adjCarb + 'g / 지방 ' + adjFat + 'g',
-      '섭취: 칼로리 ' + cn.cal + 'kcal / 단백질 ' + cn.pro + 'g / 탄수 ' + cn.carb + 'g / 지방 ' + cn.fat + 'g',
+      '하루 목표: 칼로리 ' + t.cal + 'kcal / 단백질 ' + t.pro + 'g / 탄수 ' + t.carb + 'g / 지방 ' + t.fat + 'g',
+      '현재 섭취: 칼로리 ' + cn.cal + 'kcal / 단백질 ' + cn.pro + 'g / 탄수 ' + cn.carb + 'g / 지방 ' + cn.fat + 'g',
+      '식사 현황: ' + dayCtx,
       '식단:\n' + foodLines
     ].join('\n');
     groqFetch(apiKey, { model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 80, temperature: 0.5 })
