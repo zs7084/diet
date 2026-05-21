@@ -209,7 +209,7 @@ function calcTgt(w, exC, weeklyLoss, ht, age, isFemale) {
   var carb = Math.max(80, Math.round((cal - pro * 4 - fat * 9) / 4));
   return { cal: cal, pro: pro, fat: fat, carb: carb, sug: 50, sod: 2000, bmr: b, tdee: t };
 }
-function burnCal(met, mins, w) { return Math.round(met * w * mins / 60); }
+function burnCal(met, mins, w) { return Math.round((met - 1) * w * mins / 60); }
 function sumKey(arr, k) { return Math.round((arr || []).reduce(function(a, b) { return a + (b[k] || 0); }, 0)); }
 function clamp01(a, b) { return Math.min(1, Math.max(0, a / Math.max(1, b))); }
 function mx(base, extra) { return Object.assign({}, base, extra); }
@@ -1548,7 +1548,7 @@ function ExerScreen(props) {
             h('div', { style: { padding: '11px 12px', background: C.c2, borderRadius: '10px', textAlign: 'center', marginBottom: '12px' } },
               h('p', { style: { margin: '0 0 2px', fontSize: '11px', color: C.sub } }, '예상 소모 칼로리 · 체중 ' + w + 'kg 기준'),
               h('p', { style: { margin: '0 0 1px', fontSize: '24px', fontWeight: '700', color: C.cx } }, preview + ' kcal'),
-              h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'MET × 체중 × 시간(h) 공식 적용')
+              h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, '(MET-1) × 체중 × 시간(h) — 순수 운동 소모량')
             ),
             h('div', { style: { marginBottom: '11px' } }, h('label', { style: { display: 'block', fontSize: '12px', color: C.sub, marginBottom: '3px' } }, '메모 (선택)'), h('input', { placeholder: '예: 한강 조깅, Apple Watch 소모량', value: form.notes, onChange: function(e) { setForm(mx(form, { notes: e.target.value })); }, style: INP })),
             h('button', { onClick: addExercise, style: BTP }, '추가하기')
@@ -1635,7 +1635,7 @@ function ExerScreen(props) {
       h('div', { style: { padding: '11px 12px', background: C.c2, borderRadius: '10px', textAlign: 'center', marginBottom: '12px' } },
         h('p', { style: { margin: '0 0 2px', fontSize: '11px', color: C.sub } }, '예상 소모 칼로리 · 체중 ' + w + 'kg 기준'),
         h('p', { style: { margin: '0 0 1px', fontSize: '24px', fontWeight: '700', color: C.cx } }, preview + ' kcal'),
-        h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'MET × 체중 × 시간(h) 공식 적용')
+        h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, '(MET-1) × 체중 × 시간(h) — 순수 운동 소모량')
       ),
       h('div', { style: { marginBottom: '11px' } }, L('메모 (선택)'), h('input', { placeholder: '예: 한강 조깅, Apple Watch 소모량', value: form.notes, onChange: function(e) { setForm(mx(form, { notes: e.target.value })); }, style: INP })),
       h('button', { onClick: addExercise, style: BTP }, '추가하기')
