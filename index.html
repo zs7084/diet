@@ -1069,11 +1069,13 @@ function NutrScreen(props) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
       body: JSON.stringify({
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-        max_tokens: 300,
-        messages: [{ role: 'user', content: [
+        model: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+        max_tokens: 400,
+        messages: [
+          { role: 'system', content: '너는 영양성분 분석 전문가야. 사진을 보고 정확한 영양정보를 JSON으로만 반환해. 절대 다른 텍스트 포함 금지.' },
+          { role: 'user', content: [
           { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64 } },
-          { type: 'text', text: '음식 사진 영양정보를 JSON만 반환(다른 텍스트 없음):\n{"name":"한국어 음식명","cal":숫자,"pro":숫자,"carb":숫자,"fat":숫자,"sug":숫자}\n단위: cal=kcal, 나머지=g, 1인분' }
+          { type: 'text', text: '이 사진의 영양정보를 분석해줘.\n\n규칙:\n- 영양성분표(라벨)가 보이면: 표에 적힌 숫자를 정확히 읽어서 반환\n- 음식 사진이면: 1인분 기준으로 최대한 정확히 추정\n- 음식이 여러 가지면 모두 합산\n\n반드시 아래 JSON 형식만 반환, 다른 말 없이:\n{"name":"한국어 음식명","cal":칼로리,"pro":단백질g,"carb":탄수화물g,"fat":지방g,"sug":당류g}\n\n모든 숫자는 순수 숫자만(단위 없이), cal=kcal기준' }
         ]}]
       })
     }).then(function(r) {
@@ -1083,7 +1085,12 @@ function NutrScreen(props) {
       var text = (((d.choices||[])[0]||{}).message||{}).content || '';
       if (!text) { setAnalyzeErr('응답 없음'); setAnalyzing(false); return; }
       try {
-        var cleaned = text.replace(/```json/g,'').replace(/```/g,'').trim().replace(/:\s*(\d+(?:\.\d+)?)\s*[a-zA-Z]+/g,':$1');
+        var cleaned = text.replace(/```json/gi,'').replace(/```/g,'').trim();
+        // JSON 블록만 추출 (앞뒤 설명 제거)
+        var jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        if (jsonMatch) cleaned = jsonMatch[0];
+        // 숫자 뒤 단위 제거 (예: 350kcal → 350, 20g → 20)
+        cleaned = cleaned.replace(/:\s*(\d+(?:\.\d+)?)\s*[a-zA-Zㄱ-ㅎ가-힣]+/g, ':$1');
         var r2 = JSON.parse(cleaned);
         var food = { id: Date.now(), name: r2.name||'음식', meal: form.meal||'아침', grams: 0, calories: parseFloat(r2.cal)||0, protein: parseFloat(r2.pro)||0, carbs: parseFloat(r2.carb)||0, fat: parseFloat(r2.fat)||0, sugar: parseFloat(r2.sug)||0, sodium: 0, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) };
         updD(selDate, { foods: (td.foods||[]).concat([food]) });
@@ -1109,14 +1116,14 @@ function NutrScreen(props) {
       var dataUrl = reader.result;
       var img = new window.Image();
       img.onload = function() {
-        var MAX = 800;
+        var MAX = 1280;
         var w = img.width, h = img.height;
         var ratio = Math.min(MAX / w, MAX / h, 1);
         var canvas = document.createElement('canvas');
         canvas.width = Math.round(w * ratio);
         canvas.height = Math.round(h * ratio);
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        var resizedB64 = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
+        var resizedB64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
         analyzePhotoB64(resizedB64, 'image/jpeg');
       };
       img.src = dataUrl;
