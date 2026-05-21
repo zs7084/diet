@@ -210,12 +210,41 @@ function calcTgt(w, exC, weeklyLoss, ht, age, isFemale) {
   return { cal: cal, pro: pro, fat: fat, carb: carb, sug: 50, sod: 2000, bmr: b, tdee: t };
 }
 function burnCal(met, mins, w) { return Math.round(met * w * mins / 60); }
-function fmtDate(s) { var d = new Date(s + 'T12:00:00'); return (d.getMonth() + 1) + '/' + d.getDate(); }
 function sumKey(arr, k) { return Math.round((arr || []).reduce(function(a, b) { return a + (b[k] || 0); }, 0)); }
 function clamp01(a, b) { return Math.min(1, Math.max(0, a / Math.max(1, b))); }
 function mx(base, extra) { return Object.assign({}, base, extra); }
 function getM(td) { var ms = td.measurements; if (ms && ms.length) return ms[ms.length-1]; return td.measurement || null; }
 function getAllM(td) { if (td.measurements && td.measurements.length) return td.measurements; return td.measurement ? [td.measurement] : []; }
+function groqFetch(apiKey, body) {
+  return fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+    body: JSON.stringify(body)
+  });
+}
+function aggregateByView(rawPts, viewMode) {
+  if (viewMode === 'weekly') {
+    var wkMap = {};
+    rawPts.forEach(function(p) {
+      var d = new Date(p.date), thu = new Date(d);
+      thu.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 3);
+      var wk = thu.getFullYear() + '-W' + ('0' + Math.ceil((thu - new Date(thu.getFullYear(), 0, 1)) / 604800000 + 1)).slice(-2);
+      if (!wkMap[wk]) wkMap[wk] = { sum: 0, n: 0 };
+      wkMap[wk].sum += p.value; wkMap[wk].n++;
+    });
+    return Object.keys(wkMap).sort().map(function(k) { return { lbl: k, value: Math.round(wkMap[k].sum / wkMap[k].n * 10) / 10 }; });
+  }
+  if (viewMode === 'monthly') {
+    var moMap = {};
+    rawPts.forEach(function(p) {
+      var k2 = p.date.substring(0, 7);
+      if (!moMap[k2]) moMap[k2] = { sum: 0, n: 0 };
+      moMap[k2].sum += p.value; moMap[k2].n++;
+    });
+    return Object.keys(moMap).sort().map(function(k) { return { lbl: k, value: Math.round(moMap[k].sum / moMap[k].n * 10) / 10 }; });
+  }
+  return rawPts.map(function(p) { return { lbl: fmtDate(p.date), value: p.value }; });
+}
 
 /* ─── SHARED STYLES ──────────────────────────── */
 var CARD  = { background: C.card, border: '1px solid ' + C.bd, borderRadius: '14px', padding: '14px 16px', marginBottom: '12px' };
@@ -423,18 +452,8 @@ function DashScreen(props) {
     { k: 'fatPct', lbl: '체지방률', color: C.cf, unit: '%',  dm: [17, 33] }
   ];
   function dashChartDataFor(key) {
-    var rawPts = wAllDates.map(function(k) { var m2=getM(data[k]); return { date:k, value:m2[key] }; });
-    if (dashView === 'weekly') {
-      var wkM2 = {};
-      rawPts.forEach(function(p) { var d=new Date(p.date),thu=new Date(d); thu.setDate(d.getDate()-((d.getDay()+6)%7)+3); var wk=thu.getFullYear()+'-W'+('0'+Math.ceil((thu-new Date(thu.getFullYear(),0,1))/604800000+1)).slice(-2); if(!wkM2[wk])wkM2[wk]={sum:0,n:0}; wkM2[wk].sum+=p.value;wkM2[wk].n++; });
-      return Object.keys(wkM2).sort().map(function(k){return{lbl:k,value:Math.round(wkM2[k].sum/wkM2[k].n*10)/10};});
-    } else if (dashView === 'monthly') {
-      var moM2 = {};
-      rawPts.forEach(function(p){var k2=p.date.substring(0,7);if(!moM2[k2])moM2[k2]={sum:0,n:0};moM2[k2].sum+=p.value;moM2[k2].n++;});
-      return Object.keys(moM2).sort().map(function(k){return{lbl:k,value:Math.round(moM2[k].sum/moM2[k].n*10)/10};});
-    } else {
-      return rawPts.map(function(p){return{lbl:fmtDate(p.date),value:p.value};});
-    }
+    var rawPts = wAllDates.map(function(k) { var m2 = getM(data[k]); return { date: k, value: m2[key] }; });
+    return aggregateByView(rawPts, dashView);
   }
   var dctTab = DCT_TYPES.filter(function(t){return t.k===dashChartType;})[0]||DCT_TYPES[0];
   var wChartData = dashChartDataFor(dashChartType);
@@ -526,18 +545,14 @@ function DashScreen(props) {
     if (!apiKey || tipLoading) return;
     setTipLoading(true); setTipError(false);
     var topic = TIP_TOPICS[Math.floor(Math.random() * TIP_TOPICS.length)];
-    fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          { role: 'system', content: '너는 건강 상식을 짧게 알려주는 전문가야.\n절대 규칙:\n- 한글(가나다라)과 숫자, 문장부호만 사용\n- 한자(漢字) 단 한 글자도 절대 금지\n- 로마자(abc) 금지\n- 모든 문장은 반드시 "~입니다" 또는 "~합니다" 형식으로 종결\n- 반드시 이모지를 사용할 것: 첫 번째 문장은 이모지로 시작, 두 번째 문장은 이모지로 끝냄\n- 핵심 한 문장 + 실용 팁 한 문장, 총 두 문장만\n- 제목 없음, 번호 없음' },
-          { role: 'user', content: '주제: ' + topic }
-        ],
-        max_tokens: 120,
-        temperature: 0.85
-      })
+    groqFetch(apiKey, {
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: '너는 건강 상식을 짧게 알려주는 전문가야.\n절대 규칙:\n- 한글(가나다라)과 숫자, 문장부호만 사용\n- 한자(漢字) 단 한 글자도 절대 금지\n- 로마자(abc) 금지\n- 모든 문장은 반드시 "~입니다" 또는 "~합니다" 형식으로 종결\n- 반드시 이모지를 사용할 것: 첫 번째 문장은 이모지로 시작, 두 번째 문장은 이모지로 끝냄\n- 핵심 한 문장 + 실용 팁 한 문장, 총 두 문장만\n- 제목 없음, 번호 없음' },
+        { role: 'user', content: '주제: ' + topic }
+      ],
+      max_tokens: 120,
+      temperature: 0.85
     }).then(function(r) { return r.json(); }).then(function(d) {
       var text = (((d.choices||[])[0]||{}).message||{}).content || '';
       // 한자·CJK 문자 강제 제거
@@ -714,27 +729,7 @@ function BodyScreen(props) {
     var m2 = getM(data[k]);
     return { date: k, value: ct === 'weight' ? m2.weight : ct === 'muscle' ? m2.muscle : m2.fatPct };
   });
-  var chartData;
-  if (viewMode === 'weekly') {
-    var wkMap = {};
-    rawPts.forEach(function(p) {
-      var d = new Date(p.date); var thu = new Date(d); thu.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 3);
-      var wk = thu.getFullYear() + '-W' + ('0' + Math.ceil((thu - new Date(thu.getFullYear(), 0, 1)) / 604800000 + 1)).slice(-2);
-      if (!wkMap[wk]) wkMap[wk] = { sum: 0, n: 0 };
-      wkMap[wk].sum += p.value; wkMap[wk].n++;
-    });
-    chartData = Object.keys(wkMap).sort().map(function(k) { return { lbl: k, value: Math.round(wkMap[k].sum / wkMap[k].n * 10) / 10 }; });
-  } else if (viewMode === 'monthly') {
-    var moMap = {};
-    rawPts.forEach(function(p) {
-      var k2 = p.date.substring(0, 7);
-      if (!moMap[k2]) moMap[k2] = { sum: 0, n: 0 };
-      moMap[k2].sum += p.value; moMap[k2].n++;
-    });
-    chartData = Object.keys(moMap).sort().map(function(k) { return { lbl: k, value: Math.round(moMap[k].sum / moMap[k].n * 10) / 10 }; });
-  } else {
-    chartData = rawPts.map(function(p) { return { lbl: fmtDate(p.date), value: p.value }; });
-  }
+  var chartData = aggregateByView(rawPts, viewMode);
   function onClickPoint(i) { var d = allDates[i]; setSelectedDate(selectedDate === d ? null : d); }
   var selIdx = selectedDate ? allDates.indexOf(selectedDate) : -1;
   function saveForm() {
@@ -937,17 +932,17 @@ function shiftDate(d, n) {
 function NutrScreen(props) {
   var t = props.tgt, updD = props.updateData;
   var hkData = props.hkData;
-  var s1 = useState(false); var showForm = s1[0], setShowForm = s1[1];
+  var sfSt  = useState(false); var showForm   = sfSt[0],  setShowForm   = sfSt[1];
   var isWide = props.isWide;
-  var s2 = useState('manual'); var mode = s2[0], setMode = s2[1];
-  var s3 = useState(false); var analyzing = s3[0], setAnalyzing = s3[1];
-  var s4 = useState({ name: '', cal: '', pro: '', carb: '', fat: '', sug: '', meal: '아침' }); var form = s4[0], setForm = s4[1];
-  var s5 = useState(false); var showKey = s5[0], setShowKey = s5[1];
-  var s6 = useState(''); var keyInput = s6[0], setKeyInput = s6[1];
-  var s7 = useState(null); var editingId = s7[0], setEditingId = s7[1];
-  var s8 = useState(''); var analyzeErr = s8[0], setAnalyzeErr = s8[1];
-  var s9 = useState(null); var aiResult = s9[0], setAiResult = s9[1];
-  var s10 = useState(false); var aiAnalyzing = s10[0], setAiAnalyzing = s10[1];
+  var modSt = useState('manual'); var mode      = modSt[0], setMode      = modSt[1];
+  var anzSt = useState(false); var analyzing  = anzSt[0], setAnalyzing  = anzSt[1];
+  var frmSt = useState({ name: '', cal: '', pro: '', carb: '', fat: '', sug: '', meal: '아침' }); var form = frmSt[0], setForm = frmSt[1];
+  var skSt  = useState(false); var showKey    = skSt[0],  setShowKey    = skSt[1];
+  var kiSt  = useState(''); var keyInput    = kiSt[0],  setKeyInput   = kiSt[1];
+  var eidSt = useState(null); var editingId  = eidSt[0], setEditingId  = eidSt[1];
+  var aeSt  = useState(''); var analyzeErr  = aeSt[0],  setAnalyzeErr = aeSt[1];
+  var airSt = useState(null); var aiResult   = airSt[0], setAiResult   = airSt[1];
+  var aiaSt = useState(false); var aiAnalyzing = aiaSt[0], setAiAnalyzing = aiaSt[1];
   var sds = useState(TODAY); var selDate = sds[0], setSelDate = sds[1];
   var fileRef = useRef(null);
   var td = (props.data && props.data[selDate]) || { measurement: null, foods: [], exercises: [] };
@@ -1009,11 +1004,8 @@ function NutrScreen(props) {
       '실제 섭취: 칼로리 ' + cn.cal + 'kcal / 단백질 ' + cn.pro + 'g / 탄수 ' + cn.carb + 'g / 지방 ' + cn.fat + 'g',
       '식단:\n' + foodLines
     ].join('\n');
-    fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 80, temperature: 0.5 })
-    }).then(function(r) { return r.json(); }).then(function(d) {
+    groqFetch(apiKey, { model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt }], max_tokens: 80, temperature: 0.5 })
+    .then(function(r) { return r.json(); }).then(function(d) {
       var txt = (((d.choices||[])[0]||{}).message||{}).content || '';
       var rm = txt.match(/RATING:\s*(Great|Good|Normal|Bad|Worst)/i);
       var cm = txt.match(/COMMENT:\s*(.+)/);
@@ -1065,19 +1057,16 @@ function NutrScreen(props) {
     if (!apiKey) { setShowKey(true); setAnalyzing(false); return; }
     setAnalyzing(true);
     setAnalyzeErr('AI 분석 중...');
-    fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-      body: JSON.stringify({
-        model: 'meta-llama/llama-4-maverick-17b-128e-instruct',
-        max_tokens: 400,
-        messages: [
-          { role: 'system', content: '너는 영양성분 분석 전문가야. 사진을 보고 정확한 영양정보를 JSON으로만 반환해. 절대 다른 텍스트 포함 금지.' },
-          { role: 'user', content: [
+    groqFetch(apiKey, {
+      model: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+      max_tokens: 400,
+      messages: [
+        { role: 'system', content: '너는 영양성분 분석 전문가야. 사진을 보고 정확한 영양정보를 JSON으로만 반환해. 절대 다른 텍스트 포함 금지.' },
+        { role: 'user', content: [
           { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + b64 } },
           { type: 'text', text: '이 사진의 영양정보를 분석해줘.\n\n규칙:\n- 영양성분표(라벨)가 보이면: 표에 적힌 숫자를 정확히 읽어서 반환\n- 음식 사진이면: 1인분 기준으로 최대한 정확히 추정\n- 음식이 여러 가지면 모두 합산\n\n반드시 아래 JSON 형식만 반환, 다른 말 없이:\n{"name":"한국어 음식명","cal":칼로리,"pro":단백질g,"carb":탄수화물g,"fat":지방g,"sug":당류g}\n\n모든 숫자는 순수 숫자만(단위 없이), cal=kcal기준' }
-        ]}]
-      })
+        ]}
+      ]
     }).then(function(r) {
       if (!r.ok) { return r.text().then(function(t) { throw new Error('HTTP ' + r.status + ': ' + t.slice(0,120)); }); }
       return r.json();
@@ -1288,8 +1277,8 @@ function NutrScreen(props) {
           showForm ? h('div', { style: CARD },
             h('p', { style: CTITL }, '음식 추가'),
             h('div', { style: { display: 'flex', gap: '6px', marginBottom: '12px' } },
-              h('button', { onClick: function() { setMode('manual'); }, style: { flex: 1, padding: '9px', borderRadius: '10px', border: mode === 'manual' ? '1.5px solid ' + C.acc : '1px solid ' + C.bd, background: mode === 'manual' ? C.acc + '22' : 'transparent', color: mode === 'manual' ? C.aL : C.sub, fontSize: '12px', fontWeight: mode === 'manual' ? '700' : '400', cursor: 'pointer' } }, '직접 입력'),
-              h('button', { onClick: function() { setMode('photo'); }, style: { flex: 1, padding: '9px', borderRadius: '10px', border: mode === 'photo' ? '1.5px solid ' + C.acc : '1px solid ' + C.bd, background: mode === 'photo' ? C.acc + '22' : 'transparent', color: mode === 'photo' ? C.aL : C.sub, fontSize: '12px', fontWeight: mode === 'photo' ? '700' : '400', cursor: 'pointer' } }, '사진 분석 (AI)')
+              modeBtn('manual', '직접 입력'),
+              modeBtn('photo', '사진 분석 (AI)')
             ),
             mode === 'photo' ? h('div', { style: { textAlign: 'center', padding: '16px 0' } },
               h('div', { style: { fontSize: '36px', marginBottom: '8px' } }, '📸'),
@@ -1332,33 +1321,33 @@ function NutrScreen(props) {
   return h('div', { className: 'screen' },
     h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' } },
       h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
-        h('h1', { style: { margin: 0, fontSize: '22px', fontWeight: '700' } }, '\uC601\uC591 \uAD00\uB9AC \uD83C\uDF71'),
+        h('h1', { style: { margin: 0, fontSize: '22px', fontWeight: '700' } }, '영양 관리 🍱'),
         dateNav
       ),
-      h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '\u00D7 \uB2EB\uAE30' : '+ \uCD94\uAC00')
+      h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '× 닫기' : '+ 추가')
     ),
     showKey ? h('div', { style: CARD },
-      h('p', { style: CTITL }, 'Groq API \uD0A4 \uC124\uC815'),
-      h('p', { style: { margin: '0 0 10px', fontSize: '12px', color: C.sub } }, 'console.groq.com \uC5D0\uC11C \uBB34\uB8CC \uBC1C\uAE09'),
-      h('div', { style: { marginBottom: '11px' } }, L('Groq API \uD0A4'), I({ type: 'password', placeholder: 'gsk_...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); } })),
+      h('p', { style: CTITL }, 'Groq API 키 설정'),
+      h('p', { style: { margin: '0 0 10px', fontSize: '12px', color: C.sub } }, 'console.groq.com 에서 무료 발급'),
+      h('div', { style: { marginBottom: '11px' } }, L('Groq API 키'), I({ type: 'password', placeholder: 'gsk_...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); } })),
       h('div', { style: { display: 'flex', gap: '8px' } },
-        h('button', { onClick: function() { var k=keyInput.trim(); setApiKey(k); if(k&&props.updateSettings) props.updateSettings({groqKey:k}); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '\uC800\uC7A5'),
-        h('button', { onClick: function() { setShowKey(false); }, style: mx(BTS, { flex: '1' }) }, '\uCDE8\uC18C')
+        h('button', { onClick: function() { var k=keyInput.trim(); setApiKey(k); if(k&&props.updateSettings) props.updateSettings({groqKey:k}); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '저장'),
+        h('button', { onClick: function() { setShowKey(false); }, style: mx(BTS, { flex: '1' }) }, '취소')
       )
     ) : null,
     showForm ? h('div', { style: CARD },
-      h('p', { style: CTITL }, '\uC74C\uC2DD \uCD94\uAC00'),
-      h('div', { style: { display: 'flex', gap: '6px', marginBottom: '12px' } }, modeBtn('manual', '\uC9C1\uC811 \uC785\uB825'), modeBtn('photo', '\uC0AC\uC9C4 \uBD84\uC11D (AI)')),
+      h('p', { style: CTITL }, '음식 추가'),
+      h('div', { style: { display: 'flex', gap: '6px', marginBottom: '12px' } }, modeBtn('manual', '직접 입력'), modeBtn('photo', '사진 분석 (AI)')),
       mode === 'photo' ? h('div', { style: { textAlign: 'center', padding: '16px 0' } },
-        h('div', { style: { fontSize: '36px', marginBottom: '8px' } }, '\uD83D\uDCF8'),
+        h('div', { style: { fontSize: '36px', marginBottom: '8px' } }, '📸'),
         h('p', { style: { margin: '0 0 12px', fontSize: '12px', color: C.sub } }, '사진을 추가하면 AI가 영양정보를 분석해요'),
         h('input', { ref: fileRef, type: 'file', accept: 'image/*', style: { display: 'none' }, onChange: function(e) { if (e.target.files && e.target.files[0]) analyzePhoto(e.target.files[0]); } }),
-        h('button', { onClick: function() { setAnalyzeErr(''); if (fileRef.current) { fileRef.current.click(); } }, disabled: analyzing, style: mx(BTP, { opacity: analyzing ? '0.5' : '1' }) }, analyzing ? '\uBD84\uC11D \uC911...' : '\uC0AC\uC9C4 \uC120\uD0DD / \uCD2C\uC601'),
+        h('button', { onClick: function() { setAnalyzeErr(''); if (fileRef.current) { fileRef.current.click(); } }, disabled: analyzing, style: mx(BTP, { opacity: analyzing ? '0.5' : '1' }) }, analyzing ? '분석 중...' : '사진 선택 / 촬영'),
         analyzeErr ? h('p', { style: { margin: '8px 0 0', fontSize: '12px', color: C.ce, textAlign: 'center' } }, analyzeErr) : null,
-        h('button', { onClick: function() { setShowKey(true); }, style: { background: 'none', border: 'none', color: C.aL, fontSize: '11px', cursor: 'pointer', marginTop: '8px', textDecoration: 'underline' } }, 'API \uD0A4 \uC124\uC815')
+        h('button', { onClick: function() { setShowKey(true); }, style: { background: 'none', border: 'none', color: C.aL, fontSize: '11px', cursor: 'pointer', marginTop: '8px', textDecoration: 'underline' } }, 'API 키 설정')
       ) : h('div', null,
         mealRow,
-        h('div', { style: { marginBottom: '11px' } }, L('\uC74C\uC2DD \uC774\uB984'), I({ placeholder: '\uC608: \uB2ED\uAC00\uC2B4\uC0B4 \uB3C4\uC2DC\uB099', value: form.name, onChange: function(e) { setForm(mx(form, { name: e.target.value })); } })),
+        h('div', { style: { marginBottom: '11px' } }, L('음식 이름'), I({ placeholder: '예: 닭가슴살 도시낙', value: form.name, onChange: function(e) { setForm(mx(form, { name: e.target.value })); } })),
         h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' } },
           h('div', null, L('중량 (g)'),      I({ type: 'number', placeholder: '0', value: form.g,   onChange: function(e) { setForm(mx(form, { g:    e.target.value })); } })),
           h('div', null, L('칼로리 (kcal)'), I({ type: 'number', placeholder: '0', value: form.cal,  onChange: function(e) { setForm(mx(form, { cal:  e.target.value })); } }))
@@ -1378,35 +1367,35 @@ function NutrScreen(props) {
     ) : null,
     h('div', { style: CARD },
       h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '14px', justifyItems: 'center' } },
-        h(Ring, { val: cn.cal,  max: t.cal,  color: C.cc, sz: 68, sub: 'kcal', lbl: '\uCE7C\uB85C\uB9AC' }),
-        h(Ring, { val: cn.pro,  max: t.pro,  color: C.cm, sz: 68, sub: 'g',    lbl: '\uB2E8\uBC31\uC9C8' }),
-        h(Ring, { val: cn.carb, max: t.carb, color: C.cw, sz: 68, sub: 'g',    lbl: '\uD0C4\uC218\uD654\uBB3C' }),
-        h(Ring, { val: cn.fat,  max: t.fat,  color: C.cf, sz: 68, sub: 'g',    lbl: '\uC9C0\uBC29' }),
-        h(Ring, { val: cn.sug,  max: t.sug,  color: C.csug, sz: 68, sub: 'g',  lbl: '\uB2F9\uB958' }),
-        h(Ring, { val: cn.sod,  max: t.sod,  color: C.csod, sz: 68, sub: 'mg', lbl: '\uB098\uD2B8\uB968' })
+        h(Ring, { val: cn.cal,  max: t.cal,  color: C.cc, sz: 68, sub: 'kcal', lbl: '칼로리' }),
+        h(Ring, { val: cn.pro,  max: t.pro,  color: C.cm, sz: 68, sub: 'g',    lbl: '단백질' }),
+        h(Ring, { val: cn.carb, max: t.carb, color: C.cw, sz: 68, sub: 'g',    lbl: '탄수화물' }),
+        h(Ring, { val: cn.fat,  max: t.fat,  color: C.cf, sz: 68, sub: 'g',    lbl: '지방' }),
+        h(Ring, { val: cn.sug,  max: t.sug,  color: C.csug, sz: 68, sub: 'g',  lbl: '당류' }),
+        h(Ring, { val: cn.sod,  max: t.sod,  color: C.csod, sz: 68, sub: 'mg', lbl: '나트륨' })
       ),
       h('div', { style: { borderTop: '1px solid ' + C.bd, paddingTop: '12px' } },
-        h(Bar, { lbl: '\uCE7C\uB85C\uB9AC',   curr: cn.cal,  max: t.cal,  color: C.cc, unit: 'kcal' }),
-        h(Bar, { lbl: '\uB2E8\uBC31\uC9C8',   curr: cn.pro,  max: t.pro,  color: C.cm }),
-        h(Bar, { lbl: '\uD0C4\uC218\uD654\uBB3C', curr: cn.carb, max: t.carb, color: C.cw }),
-        h(Bar, { lbl: '\uC9C0\uBC29',     curr: cn.fat,  max: t.fat,  color: C.cf }),
-        h(Bar, { lbl: '\uB2F9\uB958',     curr: cn.sug,  max: t.sug,  color: C.csug }),
-        h(Bar, { lbl: '\uB098\uD2B8\uB968',   curr: cn.sod,  max: t.sod,  color: C.csod, unit: 'mg' })
+        h(Bar, { lbl: '칼로리',   curr: cn.cal,  max: t.cal,  color: C.cc, unit: 'kcal' }),
+        h(Bar, { lbl: '단백질',   curr: cn.pro,  max: t.pro,  color: C.cm }),
+        h(Bar, { lbl: '탄수화물', curr: cn.carb, max: t.carb, color: C.cw }),
+        h(Bar, { lbl: '지방',     curr: cn.fat,  max: t.fat,  color: C.cf }),
+        h(Bar, { lbl: '당류',     curr: cn.sug,  max: t.sug,  color: C.csug }),
+        h(Bar, { lbl: '나트륨',   curr: cn.sod,  max: t.sod,  color: C.csod, unit: 'mg' })
       )
     ),
     h('div', { style: CARD },
-      h('p', { style: CTITL }, '\uB0A8\uC740 \uC12D\uCDE8\uB7C9'),
+      h('p', { style: CTITL }, '남은 섭취량'),
       h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' } },
-        h('div', { style: SBOX }, h('p', { style: SLBL }, '\uCE7C\uB85C\uB9AC'),   h('p', { style: { margin: 0, fontSize: '14px', fontWeight: '700', color: rem.cal  >= 0 ? C.cc : C.ce } }, rem.cal  + 'kcal')),
-        h('div', { style: SBOX }, h('p', { style: SLBL }, '\uB2E8\uBC31\uC9C8'),   h('p', { style: { margin: 0, fontSize: '14px', fontWeight: '700', color: rem.pro  >= 0 ? C.cm : C.ce } }, rem.pro  + 'g')),
-        h('div', { style: SBOX }, h('p', { style: SLBL }, '\uD0C4\uC218\uD654\uBB3C'), h('p', { style: { margin: 0, fontSize: '14px', fontWeight: '700', color: rem.carb >= 0 ? C.cw : C.ce } }, rem.carb + 'g')),
-        h('div', { style: SBOX }, h('p', { style: SLBL }, '\uC9C0\uBC29'),     h('p', { style: { margin: 0, fontSize: '14px', fontWeight: '700', color: rem.fat  >= 0 ? C.cf : C.ce } }, rem.fat  + 'g')),
+        h('div', { style: SBOX }, h('p', { style: SLBL }, '칼로리'),   h('p', { style: { margin: 0, fontSize: '14px', fontWeight: '700', color: rem.cal  >= 0 ? C.cc : C.ce } }, rem.cal  + 'kcal')),
+        h('div', { style: SBOX }, h('p', { style: SLBL }, '단백질'),   h('p', { style: { margin: 0, fontSize: '14px', fontWeight: '700', color: rem.pro  >= 0 ? C.cm : C.ce } }, rem.pro  + 'g')),
+        h('div', { style: SBOX }, h('p', { style: SLBL }, '탄수화물'), h('p', { style: { margin: 0, fontSize: '14px', fontWeight: '700', color: rem.carb >= 0 ? C.cw : C.ce } }, rem.carb + 'g')),
+        h('div', { style: SBOX }, h('p', { style: SLBL }, '지방'),     h('p', { style: { margin: 0, fontSize: '14px', fontWeight: '700', color: rem.fat  >= 0 ? C.cf : C.ce } }, rem.fat  + 'g')),
         h('div', { style: SBOX }, h('p', { style: SLBL }, '나트륨'), h('p', { style: { margin: 0, fontSize: '14px', fontWeight: '700', color: rem.sod >= 0 ? C.csod : C.ce } }, rem.sod + 'mg'))
       )
     ),
     hkFoodCard,
     h('div', { style: CARD },
-      h('p', { style: CTITL }, '\uC624\uB298\uC758 \uC2DD\uB2E8'),
+      h('p', { style: CTITL }, '오늘의 식단'),
       renderFoodList(td.foods || [])
     ),
     aiCard
@@ -1418,11 +1407,11 @@ function ExerScreen(props) {
   var isWide = props.isWide;
   var t = props.tgt, updD = props.updateData, w = props.w;
   var hkData = props.hkData;
-  var s1 = useState(false); var showForm = s1[0], setShowForm = s1[1];
-  var s2 = useState(false); var showWatch = s2[0], setShowWatch = s2[1];
-  var s3 = useState({ typeIdx: 0, mins: '30', notes: '' }); var form = s3[0], setForm = s3[1];
-  var s4 = useState(null); var editingExId = s4[0], setEditingExId = s4[1];
-  var s5 = useState(''); var editCalVal = s5[0], setEditCalVal = s5[1];
+  var sfSt  = useState(false); var showForm    = sfSt[0],  setShowForm    = sfSt[1];
+  var swSt  = useState(false); var showWatch   = swSt[0],  setShowWatch   = swSt[1];
+  var frmSt = useState({ typeIdx: 0, mins: '30', notes: '' }); var form = frmSt[0], setForm = frmSt[1];
+  var eidSt = useState(null); var editingExId = eidSt[0], setEditingExId = eidSt[1];
+  var ecvSt = useState(''); var editCalVal  = ecvSt[0], setEditCalVal  = ecvSt[1];
   var sds = useState(TODAY); var selDate = sds[0], setSelDate = sds[1];
   var td = (props.data && props.data[selDate]) || { foods: [], exercises: [] };
   var cn = { cal: sumKey(td.foods, 'calories') };
@@ -1565,31 +1554,31 @@ function ExerScreen(props) {
   return h('div', { className: 'screen' },
     h('div', { style: { marginBottom: '14px' } },
       h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
-        h('h1', { style: { margin: 0, fontSize: '22px', fontWeight: '700' } }, '\uC6B4\uB3D9 \uAE30\uB85D \uD83C\uDFC3'),
+        h('h1', { style: { margin: 0, fontSize: '22px', fontWeight: '700' } }, '운동 기록 🏃'),
         h('div', { style: { display: 'flex', gap: '8px' } },
-          h('button', { onClick: function() { setShowWatch(!showWatch); }, style: BTS }, '\u231A'),
-          h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '\u00D7 \uB2EB\uAE30' : '+ \uCD94\uAC00')
+          h('button', { onClick: function() { setShowWatch(!showWatch); }, style: BTS }, '⌚'),
+          h('button', { onClick: function() { setShowForm(!showForm); }, style: BTS }, showForm ? '× 닫기' : '+ 추가')
         )
       ),
       dateNav
     ),
     showWatch ? h('div', { style: mx(CARD, { borderLeft: '3px solid #f59e0b', borderRadius: '0 14px 14px 0' }) },
       h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px' } },
-        h('p', { style: CTITL }, 'Apple Watch \uC5F0\uB3D9 \uBC29\uBC95'),
-        h('button', { onClick: function() { setShowWatch(false); }, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.sub, fontSize: '20px', lineHeight: '1' } }, '\u00D7')
+        h('p', { style: CTITL }, 'Apple Watch 연동 방법'),
+        h('button', { onClick: function() { setShowWatch(false); }, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.sub, fontSize: '20px', lineHeight: '1' } }, '×')
       ),
-      h('p', { style: { margin: '0 0 5px', fontSize: '11px', color: C.sub, lineHeight: '1.5' } }, '\u2460 iPhone \uAC74\uAC15 \uC571 \u2192 \uC694\uC57D \u2192 \uCD5C\uADFC \uC6B4\uB3D9 \uAE30\uB85D \uD655\uC778'),
-      h('p', { style: { margin: '0 0 5px', fontSize: '11px', color: C.sub, lineHeight: '1.5' } }, '\u2461 \uC6B4\uB3D9 \uC885\uB958 \u00B7 \uC2DC\uAC04 \u00B7 \uC18C\uBAA8 \uCE7C\uB85C\uB9AC \uBA54\uBAA8 \uD6C4 \uC218\uB3D9 \uC785\uB825'),
-      h('p', { style: { margin: '0 0 5px', fontSize: '11px', color: C.sub, lineHeight: '1.5' } }, '\u2462 Apple Watch \uC18C\uBAA8 \uCE7C\uB85C\uB9AC \uC9C1\uC811 \uC785\uB825\uC774 \uAC00\uC7A5 \uC815\uD655'),
-      h('p', { style: { margin: 0,          fontSize: '11px', color: C.sub, lineHeight: '1.5' } }, '(\uACE0\uAE09) \uB2E8\uCD95\uC5B4 \uC571\uC73C\uB85C \uC6B4\uB3D9 \uC885\uB8CC \uC2DC \uC790\uB3D9 \uBA54\uBAA8 \uAC00\uB2A5')
+      h('p', { style: { margin: '0 0 5px', fontSize: '11px', color: C.sub, lineHeight: '1.5' } }, '① iPhone 건강 앱 → 요약 → 최근 운동 기록 확인'),
+      h('p', { style: { margin: '0 0 5px', fontSize: '11px', color: C.sub, lineHeight: '1.5' } }, '② 운동 종류 · 시간 · 소모 칼로리 메모 후 수동 입력'),
+      h('p', { style: { margin: '0 0 5px', fontSize: '11px', color: C.sub, lineHeight: '1.5' } }, '③ Apple Watch 소모 칼로리 직접 입력이 가장 정확'),
+      h('p', { style: { margin: 0,          fontSize: '11px', color: C.sub, lineHeight: '1.5' } }, '(고급) 단축어 앱으로 운동 종료 시 자동 메모 가능')
     ) : null,
     appleWatchCard,
     showForm ? h('div', { style: CARD },
       h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' } },
-        h('p', { style: CTITL }, '\uC6B4\uB3D9 \uCD94\uAC00'),
-        h('button', { onClick: function() { setShowForm(false); }, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.sub, fontSize: '22px', lineHeight: '1' } }, '\u00D7')
+        h('p', { style: CTITL }, '운동 추가'),
+        h('button', { onClick: function() { setShowForm(false); }, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.sub, fontSize: '22px', lineHeight: '1' } }, '×')
       ),
-      h('p', { style: { margin: '0 0 8px', fontSize: '12px', color: C.sub } }, '\uC6B4\uB3D9 \uC885\uB958'),
+      h('p', { style: { margin: '0 0 8px', fontSize: '12px', color: C.sub } }, '운동 종류'),
       h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '12px' } },
         EXTYPE.map(function(ex, i) {
           return h('button', { key: '' + i, onClick: function() { setForm(mx(form, { typeIdx: i })); }, style: { padding: '10px 8px', borderRadius: '10px', border: form.typeIdx === i ? '1.5px solid ' + C.acc : '1px solid ' + C.bd, background: form.typeIdx === i ? C.acc + '22' : C.c2, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '8px' } },
@@ -1601,33 +1590,33 @@ function ExerScreen(props) {
           );
         })
       ),
-      h('div', { style: { marginBottom: '11px' } }, L('\uC6B4\uB3D9 \uC2DC\uAC04 (\uBD84)'), h('input', { type: 'number', value: form.mins, onChange: function(e) { setForm(mx(form, { mins: e.target.value })); }, style: INP })),
+      h('div', { style: { marginBottom: '11px' } }, L('운동 시간 (분)'), h('input', { type: 'number', value: form.mins, onChange: function(e) { setForm(mx(form, { mins: e.target.value })); }, style: INP })),
       h('div', { style: { padding: '11px 12px', background: C.c2, borderRadius: '10px', textAlign: 'center', marginBottom: '12px' } },
-        h('p', { style: { margin: '0 0 2px', fontSize: '11px', color: C.sub } }, '\uC608\uC0C1 \uC18C\uBAA8 \uCE7C\uB85C\uB9AC \u00B7 \uCCB4\uC911 ' + w + 'kg \uAE30\uC900'),
+        h('p', { style: { margin: '0 0 2px', fontSize: '11px', color: C.sub } }, '예상 소모 칼로리 · 체중 ' + w + 'kg 기준'),
         h('p', { style: { margin: '0 0 1px', fontSize: '24px', fontWeight: '700', color: C.cx } }, preview + ' kcal'),
-        h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'MET \u00D7 \uCCB4\uC911 \u00D7 \uC2DC\uAC04(h) \uACF5\uC2DD \uC801\uC6A9')
+        h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'MET × 체중 × 시간(h) 공식 적용')
       ),
-      h('div', { style: { marginBottom: '11px' } }, L('\uBA54\uBAA8 (\uC120\uD0DD)'), h('input', { placeholder: '\uC608: \uD55C\uAC15 \uC870\uAE45, Apple Watch \uC18C\uBAA8\uB7C9', value: form.notes, onChange: function(e) { setForm(mx(form, { notes: e.target.value })); }, style: INP })),
-      h('button', { onClick: addExercise, style: BTP }, '\uCD94\uAC00\uD558\uAE30')
+      h('div', { style: { marginBottom: '11px' } }, L('메모 (선택)'), h('input', { placeholder: '예: 한강 조깅, Apple Watch 소모량', value: form.notes, onChange: function(e) { setForm(mx(form, { notes: e.target.value })); }, style: INP })),
+      h('button', { onClick: addExercise, style: BTP }, '추가하기')
     ) : null,
     h('div', { style: CARD },
-      h('p', { style: CTITL }, fmtDate(selDate) + '\uC758 \uCE7C\uB85C\uB9AC \uADE0\uD615'),
+      h('p', { style: CTITL }, fmtDate(selDate) + '의 칼로리 균형'),
       h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' } },
-        h('div', { style: SBOX }, h('p', { style: SLBL }, '\uBAA9\uD45C \uCE7C\uB85C\uB9AC'), h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: C.cc } }, '' + t.cal),        h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal')),
-        h('div', { style: SBOX }, h('p', { style: SLBL }, '\uC6B4\uB3D9 \uC18C\uBAA8'),   h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: C.cx } }, '' + totalBurned), h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal')),
-        h('div', { style: SBOX }, h('p', { style: SLBL }, '\uC21C \uC12D\uCDE8'),     h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: net <= t.cal ? C.cm : C.ce } }, '' + net), h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal'))
+        h('div', { style: SBOX }, h('p', { style: SLBL }, '목표 칼로리'), h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: C.cc } }, '' + t.cal),        h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal')),
+        h('div', { style: SBOX }, h('p', { style: SLBL }, '운동 소모'),   h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: C.cx } }, '' + totalBurned), h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal')),
+        h('div', { style: SBOX }, h('p', { style: SLBL }, '순 섭취'),     h('p', { style: { margin: '0 0 1px', fontSize: '18px', fontWeight: '700', color: net <= t.cal ? C.cm : C.ce } }, '' + net), h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, 'kcal'))
       )
     ),
     h('div', { style: CARD },
-      h('p', { style: CTITL }, fmtDate(selDate) + '\uC758 \uC6B4\uB3D9'),
-      !(td.exercises && td.exercises.length) ? h('p', { style: { margin: 0, textAlign: 'center', fontSize: '13px', color: C.sub, padding: '16px 0' } }, '\uC6B4\uB3D9 \uAE30\uB85D\uC774 \uC5C6\uC5B4\uC694') :
+      h('p', { style: CTITL }, fmtDate(selDate) + '의 운동'),
+      !(td.exercises && td.exercises.length) ? h('p', { style: { margin: 0, textAlign: 'center', fontSize: '13px', color: C.sub, padding: '16px 0' } }, '운동 기록이 없어요') :
       (td.exercises || []).map(function(ex) {
         return h('div', { key: '' + ex.id, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid ' + C.bd } },
           h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
             h('span', { style: { fontSize: '24px' } }, ex.icon),
             h('div', null,
               h('p', { style: { margin: '0 0 2px', fontSize: '13px', fontWeight: '700' } }, ex.type),
-              h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, ex.minutes + '\uBD84 \u00B7 ' + ex.time + (ex.notes ? ' \u00B7 ' + ex.notes : ''))
+              h('p', { style: { margin: 0, fontSize: '10px', color: C.sub } }, ex.minutes + '분 · ' + ex.time + (ex.notes ? ' · ' + ex.notes : ''))
             )
           ),
           h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
@@ -1645,7 +1634,7 @@ function ExerScreen(props) {
                   style: { fontSize: '13px', fontWeight: '700', color: C.cx, cursor: 'pointer', borderBottom: '1px dotted ' + C.cx },
                   onClick: function() { setEditingExId(ex.id); setEditCalVal('' + ex.calories); }
                 }, '-' + ex.calories + 'kcal'),
-            h('button', { onClick: function() { deleteExercise(ex.id); }, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.sub, padding: '4px', fontSize: '16px' } }, '\uD83D\uDDD1')
+            h('button', { onClick: function() { deleteExercise(ex.id); }, style: { background: 'none', border: 'none', cursor: 'pointer', color: C.sub, padding: '4px', fontSize: '16px' } }, '🗑')
           )
         );
       })
@@ -1840,15 +1829,11 @@ function ChatScreen(props) {
       newMsgs.slice(-10).map(function(m) { return { role: m.role === 'user' ? 'user' : 'assistant', content: m.text }; })
     );
     function doFetch(retrying) {
-      fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 600,
-          temperature: 0.1,
-          messages: chatHistory
-        })
+      groqFetch(apiKey, {
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 600,
+        temperature: 0.1,
+        messages: chatHistory
       }).then(function(r) {
         if (r.status === 401 && !retrying) {
           setTimeout(function() { doFetch(true); }, 1500);
@@ -2205,7 +2190,7 @@ function App() {
   }
 
   if (!data) {
-    return h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontSize: '14px', color: C.sub, background: C.bg } }, '\uBD88\uB7EC\uC624\uB294 \uC911...');
+    return h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontSize: '14px', color: C.sub, background: C.bg } }, '불러오는 중...');
   }
 
   var goal = (data.__settings && data.__settings.goal != null) ? data.__settings.goal : DEF_GOAL;
@@ -2231,12 +2216,12 @@ function App() {
       tab === 'settings'  ? h(SettingsScreen, ctx) : null
     ),
     !isWide ? h('nav', { className: 'nav', style: { background: C.card, borderTop: '1px solid ' + C.bd } },
-      h('button', { className: 'nb' + (tab === 'dash'      ? ' on' : ''), onClick: function() { setTab('dash');      } }, h('span', { className: 'ni' }, '\uD83C\uDFE0'), h('span', { className: 'nl' }, '\uD648')),
-      h('button', { className: 'nb' + (tab === 'body'      ? ' on' : ''), onClick: function() { setTab('body');      } }, h('span', { className: 'ni' }, '\u2696\uFE0F'), h('span', { className: 'nl' }, '\uCCB4\uC911')),
-      h('button', { className: 'nb' + (tab === 'nutrition' ? ' on' : ''), onClick: function() { setTab('nutrition'); } }, h('span', { className: 'ni' }, '\uD83C\uDF71'), h('span', { className: 'nl' }, '\uC601\uC591')),
-      h('button', { className: 'nb' + (tab === 'exercise'  ? ' on' : ''), onClick: function() { setTab('exercise');  } }, h('span', { className: 'ni' }, '\uD83C\uDFC3'), h('span', { className: 'nl' }, '\uC6B4\uB3D9')),
-      h('button', { className: 'nb' + (tab === 'chat'      ? ' on' : ''), onClick: function() { setTab('chat');      } }, h('span', { className: 'ni' }, '\uD83E\uDD16'), h('span', { className: 'nl' }, 'AI\uC0C1\uB2F4')),
-      h('button', { className: 'nb' + (tab === 'settings'  ? ' on' : ''), onClick: function() { setTab('settings');  } }, h('span', { className: 'ni' }, '\u2699\uFE0F'), h('span', { className: 'nl' }, '\uC124\uC815'))
+      h('button', { className: 'nb' + (tab === 'dash'      ? ' on' : ''), onClick: function() { setTab('dash');      } }, h('span', { className: 'ni' }, '🏠'), h('span', { className: 'nl' }, '홈')),
+      h('button', { className: 'nb' + (tab === 'body'      ? ' on' : ''), onClick: function() { setTab('body');      } }, h('span', { className: 'ni' }, '⚖️'), h('span', { className: 'nl' }, '체중')),
+      h('button', { className: 'nb' + (tab === 'nutrition' ? ' on' : ''), onClick: function() { setTab('nutrition'); } }, h('span', { className: 'ni' }, '🍱'), h('span', { className: 'nl' }, '영양')),
+      h('button', { className: 'nb' + (tab === 'exercise'  ? ' on' : ''), onClick: function() { setTab('exercise');  } }, h('span', { className: 'ni' }, '🏃'), h('span', { className: 'nl' }, '운동')),
+      h('button', { className: 'nb' + (tab === 'chat'      ? ' on' : ''), onClick: function() { setTab('chat');      } }, h('span', { className: 'ni' }, '🤖'), h('span', { className: 'nl' }, 'AI상담')),
+      h('button', { className: 'nb' + (tab === 'settings'  ? ' on' : ''), onClick: function() { setTab('settings');  } }, h('span', { className: 'ni' }, '⚙️'), h('span', { className: 'nl' }, '설정'))
     ) : null
   );
 }
