@@ -945,6 +945,7 @@ function NutrScreen(props) {
   var aiaSt = useState(false); var aiAnalyzing = aiaSt[0], setAiAnalyzing = aiaSt[1];
   var sds = useState(TODAY); var selDate = sds[0], setSelDate = sds[1];
   var fileRef = useRef(null);
+  var prevFoodsLenRef = useRef(-1);
   var td = (props.data && props.data[selDate]) || { measurement: null, foods: [], exercises: [] };
   var cn = { cal: sumKey(td.foods,'calories'), pro: sumKey(td.foods,'protein'), fat: sumKey(td.foods,'fat'), carb: sumKey(td.foods,'carbs'), sug: sumKey(td.foods,'sugar'), sod: sumKey(td.foods,'sodium') };
   var isToday = selDate === TODAY;
@@ -1021,22 +1022,37 @@ function NutrScreen(props) {
       var rating = rm ? rm[1] : 'Normal';
       var rEmojis = (RATING_MAP[rating] || RATING_MAP['Normal']).emojis;
       var emoji = rEmojis[Math.floor(Math.random() * rEmojis.length)];
-      setAiResult({ rating: rating, comment: cm ? cm[1].trim() : txt.trim().slice(0,40), emoji: emoji });
+      var aiRes = { rating: rating, comment: cm ? cm[1].trim() : txt.trim().slice(0,40), emoji: emoji };
+      setAiResult(aiRes);
       setAiAnalyzing(false);
+      try { localStorage.setItem('diet-ai-' + selDate, JSON.stringify(aiRes)); } catch(e) {}
     }).catch(function() {
       setAiResult({ rating: 'Normal', comment: 'API 오류가 발생했어요.' });
       setAiAnalyzing(false);
     });
   }
 
-  useEffect(function() { setAiResult(null); setAiAnalyzing(false); }, [selDate]);
-
+  // 날짜 변경 시: 저장된 분석 결과 복원 (없으면 null), prevRef 초기화
   useEffect(function() {
-    var foods = td.foods || [];
-    if (!foods.length) { setAiResult(null); return; }
-    var tid = setTimeout(function() { analyzeDiet(); }, 2000);
-    return function() { clearTimeout(tid); };
-  }, [cn.cal, (td.foods || []).length, t.cal]);
+    setAiAnalyzing(false);
+    var saved = localStorage.getItem('diet-ai-' + selDate);
+    if (saved) { try { setAiResult(JSON.parse(saved)); } catch(e) { setAiResult(null); } }
+    else { setAiResult(null); }
+    prevFoodsLenRef.current = (td.foods || []).length;
+  }, [selDate]);
+
+  // 음식이 새로 추가됐을 때만 자동 재분석 (탭 재방문·삭제 시엔 분석 안 함)
+  useEffect(function() {
+    var len = (td.foods || []).length;
+    var prev = prevFoodsLenRef.current;
+    if (prev >= 0 && len > prev) {
+      prevFoodsLenRef.current = len;
+      var ak = (getApiKey() || '').replace(/[^\x21-\x7E]/g,'').trim();
+      if (ak) { var tid = setTimeout(analyzeDiet, 600); return function() { clearTimeout(tid); }; }
+    } else if (prev < 0) {
+      prevFoodsLenRef.current = len;
+    }
+  }, [(td.foods || []).length]);
 
   var rInfo = aiResult ? (RATING_MAP[aiResult.rating] || RATING_MAP['Normal']) : null;
   var aiCard = h('div', { style: CARD },
