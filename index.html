@@ -975,17 +975,26 @@ function NutrScreen(props) {
     var foodLines = foods.map(function(f) {
       return '- ' + f.name + ' (' + f.meal + '): ' + Math.round(f.calories) + 'kcal, 단백질 ' + (f.protein||0) + 'g, 탄수 ' + (f.carbs||0) + 'g, 지방 ' + (f.fat||0) + 'g';
     }).join('\n');
-    var mealProportions = { '아침': 0.30, '점심': 0.35, '저녁': 0.35 };
+    var mealProps = { '아침': 0.30, '점심': 0.35, '저녁': 0.35 };
     var loggedMeals = {};
     foods.forEach(function(f) { loggedMeals[f.meal] = true; });
-    var loggedMealNames = Object.keys(mealProportions).filter(function(m) { return loggedMeals[m]; });
-    var proportion = loggedMealNames.reduce(function(s, m) { return s + mealProportions[m]; }, 0);
-    if (proportion === 0) proportion = 0.5;
-    var adjCal = Math.round(t.cal * proportion);
-    var adjPro = Math.round(t.pro * proportion);
+    // 주요 식사(아침/점심/저녁)에 해당하는 비중 합산
+    var loggedMainMeals = Object.keys(mealProps).filter(function(m) { return loggedMeals[m]; });
+    var proportion = loggedMainMeals.reduce(function(s, m) { return s + mealProps[m]; }, 0);
+    // 간식이 기록됐으면 15% 추가 반영 (간식 칼로리가 분자에는 포함되므로 분모에도 반영해야 공정)
+    if (loggedMeals['간식']) proportion = Math.min(1.0, proportion + 0.15);
+    // 아무 것도 없으면(간식만) 기본값 50%
+    if (proportion === 0) proportion = 0.50;
+    var adjCal  = Math.round(t.cal  * proportion);
+    var adjPro  = Math.round(t.pro  * proportion);
     var adjCarb = Math.round(t.carb * proportion);
-    var adjFat = Math.round(t.fat * proportion);
-    var mealCtx = loggedMealNames.length ? loggedMealNames.join('+') + ' 기준 (' + Math.round(proportion*100) + '%)' : '간식만';
+    var adjFat  = Math.round(t.fat  * proportion);
+    // 남은 식사 계산
+    var allMainMeals = ['아침', '점심', '저녁'];
+    var remainingMeals = allMainMeals.filter(function(m) { return !loggedMeals[m]; });
+    var doneCtx = (loggedMainMeals.length ? loggedMainMeals.join('+') : '') + (loggedMeals['간식'] ? (loggedMainMeals.length ? '+간식' : '간식') : '');
+    var mealCtx = doneCtx + ' 완료 (' + Math.round(proportion * 100) + '% 기준)';
+    var remainCtx = remainingMeals.length ? remainingMeals.join('+') + ' 남음' : '하루 식사 완료';
     var prompt = [
       '식단 분석 결과를 아래 형식으로만 답하라. 다른 말 절대 금지.',
       'RATING: [Great/Good/Normal/Bad/Worst 중 하나]',
@@ -993,13 +1002,13 @@ function NutrScreen(props) {
       '',
       '★ 이것은 다이어트 앱이다. 칼로리 상한량은 절대로 넘으면 안 되는 최대치이며, 이보다 적게 먹을수록 좋다.',
       '★ RATING 기준 (칼로리 기준 우선, 영양소 균형 보조):',
-      '  Great = 상한량 대비 80% 이하 섭취 + 단백질 충분',
-      '  Good  = 상한량 대비 80~95% 섭취 or 살짝 넘었지만 영양 균형 좋음',
-      '  Normal = 상한량 대비 95~105% 섭취',
-      '  Bad   = 상한량 대비 105~120% 초과',
-      '  Worst = 상한량 대비 120% 이상 초과',
+      '  Great = 비례 상한량 대비 80% 이하 섭취 + 단백질 충분',
+      '  Good  = 비례 상한량 대비 80~95% 섭취 or 살짝 넘었지만 영양 균형 좋음',
+      '  Normal = 비례 상한량 대비 95~105% 섭취',
+      '  Bad   = 비례 상한량 대비 105~120% 초과',
+      '  Worst = 비례 상한량 대비 120% 이상 초과',
       '',
-      '⚠️ 아직 하루가 끝나지 않음. 기록된 식사(' + mealCtx + ')에 비례한 상한량과 비교하라.',
+      '현황: ' + mealCtx + ' / ' + remainCtx,
       '비례 상한량: 칼로리 ' + adjCal + 'kcal / 단백질 ' + adjPro + 'g / 탄수 ' + adjCarb + 'g / 지방 ' + adjFat + 'g',
       '실제 섭취: 칼로리 ' + cn.cal + 'kcal / 단백질 ' + cn.pro + 'g / 탄수 ' + cn.carb + 'g / 지방 ' + cn.fat + 'g',
       '식단:\n' + foodLines
