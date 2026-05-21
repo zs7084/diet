@@ -945,7 +945,7 @@ function NutrScreen(props) {
   var aiaSt = useState(false); var aiAnalyzing = aiaSt[0], setAiAnalyzing = aiaSt[1];
   var sds = useState(TODAY); var selDate = sds[0], setSelDate = sds[1];
   var fileRef = useRef(null);
-  var prevFoodsLenRef = useRef(-1);
+  var prevFoodsFpRef = useRef(null); // null = 미초기화, 변경 감지용 fingerprint
   var td = (props.data && props.data[selDate]) || { measurement: null, foods: [], exercises: [] };
   var cn = { cal: sumKey(td.foods,'calories'), pro: sumKey(td.foods,'protein'), fat: sumKey(td.foods,'fat'), carb: sumKey(td.foods,'carbs'), sug: sumKey(td.foods,'sugar'), sod: sumKey(td.foods,'sodium') };
   var isToday = selDate === TODAY;
@@ -1032,27 +1032,33 @@ function NutrScreen(props) {
     });
   }
 
-  // 날짜 변경 시: 저장된 분석 결과 복원 (없으면 null), prevRef 초기화
+  // 날짜 변경 시: 저장된 분석 결과 복원 (없으면 null), fingerprint 초기화
   useEffect(function() {
     setAiAnalyzing(false);
     var saved = localStorage.getItem('diet-ai-' + selDate);
     if (saved) { try { setAiResult(JSON.parse(saved)); } catch(e) { setAiResult(null); } }
     else { setAiResult(null); }
-    prevFoodsLenRef.current = (td.foods || []).length;
+    prevFoodsFpRef.current = cn.cal + '|' + cn.pro + '|' + cn.carb + '|' + cn.fat + '|' + (td.foods||[]).length;
   }, [selDate]);
 
-  // 음식이 새로 추가됐을 때만 자동 재분석 (탭 재방문·삭제 시엔 분석 안 함)
+  // 식단이 실제로 바뀐 경우에만 자동 재분석 (추가·삭제·수정 모두 감지, 탭 재방문은 무시)
   useEffect(function() {
-    var len = (td.foods || []).length;
-    var prev = prevFoodsLenRef.current;
-    if (prev >= 0 && len > prev) {
-      prevFoodsLenRef.current = len;
+    var fp = cn.cal + '|' + cn.pro + '|' + cn.carb + '|' + cn.fat + '|' + (td.foods||[]).length;
+    var prev = prevFoodsFpRef.current;
+    if (prev !== null && fp !== prev) {
+      prevFoodsFpRef.current = fp;
+      var foods = td.foods || [];
+      if (!foods.length) {
+        setAiResult(null);
+        try { localStorage.removeItem('diet-ai-' + selDate); } catch(e) {}
+        return;
+      }
       var ak = (getApiKey() || '').replace(/[^\x21-\x7E]/g,'').trim();
       if (ak) { var tid = setTimeout(analyzeDiet, 600); return function() { clearTimeout(tid); }; }
-    } else if (prev < 0) {
-      prevFoodsLenRef.current = len;
+    } else if (prev === null) {
+      prevFoodsFpRef.current = fp;
     }
-  }, [(td.foods || []).length]);
+  }, [cn.cal, cn.pro, cn.carb, cn.fat, (td.foods||[]).length]);
 
   var rInfo = aiResult ? (RATING_MAP[aiResult.rating] || RATING_MAP['Normal']) : null;
   var aiCard = h('div', { style: CARD },
