@@ -1032,12 +1032,21 @@ function NutrScreen(props) {
     });
   }
 
-  // 날짜 변경 시: 저장된 분석 결과 복원 (없으면 null), fingerprint 초기화
+  // 날짜 변경(+첫 마운트) 시: 저장된 분석 복원, 없으면 음식 있을 경우 자동 분석
   useEffect(function() {
     setAiAnalyzing(false);
     var saved = localStorage.getItem('diet-ai-' + selDate);
-    if (saved) { try { setAiResult(JSON.parse(saved)); } catch(e) { setAiResult(null); } }
-    else { setAiResult(null); }
+    if (saved) {
+      try { setAiResult(JSON.parse(saved)); } catch(e) { setAiResult(null); }
+    } else {
+      setAiResult(null);
+      // 저장된 분석이 없고 음식이 이미 있으면 바로 분석 실행
+      var foods = td.foods || [];
+      if (foods.length > 0) {
+        var ak = (getApiKey() || '').replace(/[^\x21-\x7E]/g,'').trim();
+        if (ak) setTimeout(analyzeDiet, 600);
+      }
+    }
     prevFoodsFpRef.current = cn.cal + '|' + cn.pro + '|' + cn.carb + '|' + cn.fat + '|' + (td.foods||[]).length;
   }, [selDate]);
 
