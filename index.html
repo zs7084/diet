@@ -1242,7 +1242,7 @@ function NutrScreen(props) {
         h('p', { style: { margin: '0 0 10px', fontSize: '12px', color: C.sub } }, 'console.groq.com 에서 무료 발급'),
         h('div', { style: { marginBottom: '11px' } }, h('label', { style: { display: 'block', fontSize: '12px', color: C.sub, marginBottom: '3px' } }, 'Groq API 키'), h('input', { type: 'password', placeholder: 'gsk_...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); }, style: INP })),
         h('div', { style: { display: 'flex', gap: '8px' } },
-          h('button', { onClick: function() { setApiKey(keyInput.trim()); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '저장'),
+          h('button', { onClick: function() { var k=keyInput.trim(); setApiKey(k); if(k&&props.updateSettings) props.updateSettings({groqKey:k}); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '저장'),
           h('button', { onClick: function() { setShowKey(false); }, style: mx(BTS, { flex: '1' }) }, '취소')
         )
       ) : null,
@@ -1335,7 +1335,7 @@ function NutrScreen(props) {
       h('p', { style: { margin: '0 0 10px', fontSize: '12px', color: C.sub } }, 'console.groq.com \uC5D0\uC11C \uBB34\uB8CC \uBC1C\uAE09'),
       h('div', { style: { marginBottom: '11px' } }, L('Groq API \uD0A4'), I({ type: 'password', placeholder: 'gsk_...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); } })),
       h('div', { style: { display: 'flex', gap: '8px' } },
-        h('button', { onClick: function() { setApiKey(keyInput.trim()); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '\uC800\uC7A5'),
+        h('button', { onClick: function() { var k=keyInput.trim(); setApiKey(k); if(k&&props.updateSettings) props.updateSettings({groqKey:k}); setShowKey(false); }, style: mx(BTP, { flex: '1', width: 'auto' }) }, '\uC800\uC7A5'),
         h('button', { onClick: function() { setShowKey(false); }, style: mx(BTS, { flex: '1' }) }, '\uCDE8\uC18C')
       )
     ) : null,
@@ -1663,7 +1663,9 @@ function SettingsScreen(props) {
     setTimeout(function() { setSaved(''); }, 1800);
   }
   function saveKey() {
-    setApiKey(keyV.trim());
+    var k = keyV.trim();
+    setApiKey(k);
+    if (k) updS({ groqKey: k });
     setSaved('api');
     setTimeout(function() { setSaved(''); }, 1800);
   }
@@ -1942,7 +1944,7 @@ function ChatScreen(props) {
       h('p', { style: { margin: '0 0 8px', fontSize: '11px', color: C.sub } }, 'console.groq.com 에서 무료 발급'),
       h('div', { style: { display: 'flex', gap: '8px' } },
         h('input', { type: 'password', placeholder: 'gsk_...', value: keyInput, onChange: function(e) { setKeyInput(e.target.value); }, style: mx(INP, { flex: 1, margin: 0 }) }),
-        h('button', { onClick: function() { setApiKey(keyInput.trim()); setShowKey(false); }, style: mx(BTP, { width: 'auto', padding: '0 14px', margin: 0 }) }, '저장')
+        h('button', { onClick: function() { var k=keyInput.trim(); setApiKey(k); if(k&&props.updateSettings) props.updateSettings({groqKey:k}); setShowKey(false); }, style: mx(BTP, { width: 'auto', padding: '0 14px', margin: 0 }) }, '저장')
       )
     ) : null,
     h('div', { style: { flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' } },
@@ -2028,12 +2030,18 @@ function App() {
   }); var chatMsgs = cms[0], setChatMsgs = cms[1];
 
   useEffect(function() {
+    function syncGroqKey(d) {
+      if (d && d.__settings && d.__settings.groqKey) {
+        localStorage.setItem('diet-ak', d.__settings.groqKey);
+      }
+    }
     var local = loadData();
     if (local) {
+      syncGroqKey(local);
       setData(local);
       fbLoad(function(cloudJson) {
         if (!cloudJson) return;
-        try { var d = JSON.parse(cloudJson); localStorage.setItem(STORE, cloudJson); setData(d); } catch(e) {}
+        try { var d = JSON.parse(cloudJson); localStorage.setItem(STORE, cloudJson); syncGroqKey(d); setData(d); } catch(e) {}
       });
     } else {
       fbLoad(function(cloudJson) {
@@ -2041,6 +2049,7 @@ function App() {
           try {
             var d = JSON.parse(cloudJson);
             localStorage.setItem(STORE, cloudJson);
+            syncGroqKey(d);
             setData(d);
             return;
           } catch(e) {}
@@ -2135,6 +2144,9 @@ function App() {
       try {
         var d = JSON.parse(json);
         localStorage.setItem(STORE, json);
+        if (d && d.__settings && d.__settings.groqKey) {
+          localStorage.setItem('diet-ak', d.__settings.groqKey);
+        }
         setData(d);
       } catch(e) {}
     });
