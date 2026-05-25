@@ -310,17 +310,15 @@ function LineChart(props) {
   if (pathD) { elems.push(h('path', { key: 'ln', d: pathD, fill: 'none', stroke: color, strokeWidth: 2.5, strokeLinecap: 'round', strokeLinejoin: 'round' })); }
   var onClickPoint = props.onClickPoint;
   var selectedIndex = props.selectedIndex != null ? props.selectedIndex : -1;
-  /* 레이블 간 최소 42px 확보, 모바일 좁은 화면일수록 자동으로 줄임 */
-  var MAX_LBL = Math.max(3, Math.min(7, Math.floor((cW - 2 * iPad) / 42)));
-  var step = n > MAX_LBL ? Math.ceil((n - 1) / (MAX_LBL - 1)) : 1;
+  var step = n > 7 ? Math.ceil((n - 1) / 6) : 1;
   data.forEach(function(d, i) {
     var x = xP(i), y = yP(d.value);
     var isSel = selectedIndex === i;
-    var show = isSel || n <= MAX_LBL || i === 0 || i === n - 1 || (i % step === 0);
+    var show = isSel || n <= 7 || i === 0 || i === n - 1 || (i % step === 0);
     if (show) {
       elems.push(h('text', { key: 'vl' + i, x: x, y: y - 9, textAnchor: 'middle', fill: isSel ? '#fff' : color, fontSize: isSel ? 11 : 10, fontWeight: '700' }, '' + d.value + unit));
     }
-    elems.push(h('circle', { key: 'dt' + i, cx: x, cy: y, r: isSel ? 9 : (show ? 4.5 : 3), fill: show ? color : color + '70', stroke: isSel ? '#fff' : 'none', strokeWidth: isSel ? 3 : 0 }));
+    elems.push(h('circle', { key: 'dt' + i, cx: x, cy: y, r: isSel ? 9 : 4.5, fill: color, stroke: isSel ? '#fff' : 'none', strokeWidth: isSel ? 3 : 0 }));
     if (show) {
       elems.push(h('text', { key: 'xl' + i, x: x, y: H - 4, textAnchor: 'middle', fill: isSel ? C.aL : '#555', fontSize: 9, fontWeight: isSel ? '700' : '400' }, d.lbl));
     }
