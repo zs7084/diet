@@ -765,7 +765,7 @@ function BodyScreen(props) {
   }
   function deleteBodyEntry(id, dk) {
     dk = dk || TODAY;
-    updD(dk, { measurements: getAllM(data[dk] || {}).filter(function(m) { return m.id !== id; }) });
+    updD(dk, { measurements: getAllM(data[dk] || {}).filter(function(m) { return String(m.id) !== String(id); }) });
   }
   function startEdit(m2, dk, entryKey) {
     setForm({ weight: '' + m2.weight, muscle: '' + m2.muscle, fatPct: '' + m2.fatPct });
