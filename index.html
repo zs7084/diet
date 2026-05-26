@@ -846,7 +846,7 @@ function BodyScreen(props) {
         return hkData && (hkData.weight || hkData.fatPct || hkData.muscle) ? h('button', {
           onClick: function() {
             if (hkBodyAdded) return;
-            setForm({ weight: hkData.weight ? '' + hkData.weight : form.weight, muscle: hkData.muscle ? '' + hkData.muscle : form.muscle, fatPct: hkData.fatPct ? '' + hkData.fatPct : form.fatPct });
+            setForm({ weight: hkData.weight ? '' + hkData.weight : form.weight, muscle: '', fatPct: hkData.fatPct ? '' + hkData.fatPct : form.fatPct });
             setHkFill(true);
           },
           disabled: hkBodyAdded,
